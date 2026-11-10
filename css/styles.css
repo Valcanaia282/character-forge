@@ -260,8 +260,8 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
 .lhead { grid-column: 1 / -1; }
 .lc-combat { grid-column: span 7; } .lc-abil { grid-column: span 5; }
 .lc-skills { grid-column: span 4; } .lc-attacks { grid-column: span 8; }
-.lc-magic { grid-column: span 8; } .lc-res { grid-column: span 4; }
-.lc-feats { grid-column: span 7; } .lc-eq { grid-column: span 5; }
+.lc-magic { grid-column: 1 / -1; } .lc-feats { grid-column: 1 / -1; }
+.lc-res { grid-column: span 5; } .lc-eq { grid-column: span 7; }
 .lc-profs, .lc-pers { grid-column: span 6; }
 .lc-story, .lc-notes { grid-column: span 6; }
 .name-input { font: 700 1.7rem var(--serif) !important; color: var(--gold-2) !important; background: transparent !important; border: 0 !important; border-bottom: 1px dashed var(--line) !important; border-radius: 0 !important; padding: 2px 0 !important; }
@@ -330,6 +330,37 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
 .leq li:hover .mini { opacity: 1; }
 .lcard textarea { width: 100%; }
 .coins-line { font-size: .85rem; font-weight: 700; }
+.sp-top-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.sp-top-grid h4 { margin-top: 0; }
+.prep-info { margin: 10px 0 0; } .prep-info.over { color: #ffc2ba; }
+.sp-group { margin-top: 14px; }
+.sp-cards, .ab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.sp-card, .ab-card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+.sp-card.prep { border-color: var(--gold); box-shadow: inset 4px 0 0 var(--gold); }
+.sp-card.unprep { opacity: .78; }
+.sp-head, .ab-h { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+.sp-name, .ab-name { font: 700 1rem var(--serif) !important; color: var(--gold-2) !important; background: transparent !important; border: 0 !important; border-bottom: 1px dashed var(--line) !important; border-radius: 0 !important; padding: 2px 0 !important; flex: 1; min-width: 0; }
+.sp-tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.prep-btn { font: 600 .78rem var(--sans); border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); border-radius: 999px; padding: 2px 10px; cursor: pointer; margin-left: auto; }
+.prep-btn.on { background: var(--gold); color: #241a0a; border-color: var(--gold); }
+.sp-desc { margin: 0; font-size: .9rem; color: var(--ink-2); }
+.sp-notes { font-size: .9rem !important; padding: 5px 8px !important; }
+.sp-add { margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--line); display: grid; gap: 8px; }
+.sp-add h4 { margin: 0; }
+.sp-add .row select#spAddSel { flex: 2 1 240px; }
+.ab-card.auto { background: var(--panel-2); }
+.ab-card.auto p { margin: 0; font-size: .9rem; color: var(--ink-2); }
+.ab-card.mine { border-color: rgba(212, 166, 74, .55); }
+.src-chip { font: 600 .7rem var(--sans); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.ab-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: .82rem; color: var(--muted); }
+.ab-meta label { display: flex; align-items: center; gap: 4px; }
+.ab-meta select { width: auto; padding: 4px 6px; font-size: .85rem; }
+.ab-meta input { padding: 4px 6px; }
+.ab-card textarea { font-size: .92rem; }
+.ab-sugg { margin: 4px 0 10px; }
+.ab-tabs h4:first-child { margin-top: 0; }
+.sp-circle { list-style: none; margin-left: -1.1em; font-weight: 700; text-transform: uppercase; font-size: .75rem; letter-spacing: .06em; color: #6b4a1f; margin-top: 4px; }
+@media (max-width: 700px) { .sp-top-grid { grid-template-columns: 1fr; } }
 .sh-free { white-space: normal; border-top: 1px dotted var(--parch-2); padding-top: 6px; }
 @media (max-width: 1000px) {
   .lc-combat, .lc-abil, .lc-skills, .lc-attacks, .lc-magic, .lc-res, .lc-feats, .lc-eq, .lc-profs, .lc-pers, .lc-story, .lc-notes { grid-column: 1 / -1; }
