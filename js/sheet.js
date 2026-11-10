@@ -13,7 +13,150 @@
       sh.coins.po = c.backgroundId === 'acolyte' ? 15 : c.backgroundId === 'custom' ? 10 : 0;
       sh.coinsInit = true;
     }
+    if ((sh.features || '').trim()) {
+      sh.abilities.push({ name: 'Anotações de habilidades', level: '', src: 'Outro', max: '', per: 'descanso longo', desc: sh.features });
+      sh.features = '';
+    }
     return sh;
+  }
+
+  const PREPARERS = ['cleric', 'druid', 'wizard', 'paladin'];
+  const AB_SOURCES = ['Classe', 'Caminho', 'Espécie', 'Antecedente', 'Talento', 'Item mágico', 'Outro'];
+  const PERS = ['descanso curto', 'descanso longo', 'dia'];
+  const srdByName = name => { const n = (name || '').trim().toLowerCase(); const hit = Object.entries(R.spells).find(([, v]) => v.name.toLowerCase() === n); return hit ? { id: hit[0], ...hit[1] } : null; };
+  const circleName = n => (Number(n) === 0 ? 'Truques' : `${n}º círculo`);
+
+  /** Monta (ou completa) o quadro de magias a partir das escolhas feitas no assistente. */
+  function seedSpells(c, d, existing) {
+    const list = existing ? existing.slice() : [];
+    const add = (sid, name, circle, prep, notes) => {
+      if (list.some(x => (sid && x.sid === sid) || x.name.toLowerCase() === name.toLowerCase())) return;
+      list.push({ sid: sid || '', name, circle: Number(circle) || 0, prep: !!prep, notes: notes || '' });
+    };
+    const sp = id => R.spells[id];
+    const sc = d.spellcasting;
+    c.choices.cantrips.forEach(id => sp(id) && add(id, sp(id).name, 0, true));
+    d.raceCantrips.forEach(r => sp(r.id) && add(r.id, sp(r.id).name, 0, true, 'Truque da espécie (usa ' + E.abName(r.ability) + ')'));
+    if (sc) {
+      (sc.always || []).forEach(id => sp(id) && add(id, sp(id).name, sp(id).lvl, true, 'Sempre preparada pelo caminho'));
+      if (sc.type === 'known') c.choices.spells.forEach(id => sp(id) && add(id, sp(id).name, sp(id).lvl, true));
+      if (sc.type === 'spellbook') c.choices.spells.forEach(id => sp(id) && add(id, sp(id).name, sp(id).lvl, c.choices.prepared.includes(id), 'No grimório'));
+      if (sc.type === 'prepared') c.choices.prepared.forEach(id => sp(id) && add(id, sp(id).name, sp(id).lvl, true));
+    }
+    (c.sheet.extraSpells || []).forEach(x => {
+      if (!(x.name || '').trim()) return;
+      const srd = srdByName(x.name);
+      add(srd ? srd.id : '', x.name.trim(), parseInt(x.circle, 10) || (srd ? srd.lvl : 1), true, x.notes);
+    });
+    return list;
+  }
+
+  function spellPanel(ui, c, d) {
+    const { esc, sign } = ui;
+    const sh = c.sheet, sc = d.spellcasting;
+    const preparer = PREPARERS.includes(c.classId);
+    const abMod = sc ? d.mods[sc.ability] : 0;
+    const prepLimit = !sc ? 0 : c.classId === 'paladin' ? Math.max(1, abMod + Math.floor(d.level / 2)) : Math.max(1, abMod + d.level);
+    const prepCount = sh.spells.filter(x => x.circle > 0 && x.prep).length;
+    const have = new Set(sh.spells.map(x => x.sid).filter(Boolean));
+    const pool = [0, 1].flatMap(l => E.spellList(c.classId, l, c.choices.subclass)).filter(x => !have.has(x.id));
+    const circles = [...new Set(sh.spells.map(x => Number(x.circle) || 0))].sort((a, b) => a - b);
+    const boxes = (n, used, action, idAttr) => Array.from({ length: n }, (_, i) =>
+      `<button class="box ${i < used ? 'used' : ''}" data-action="${action}" ${idAttr} data-n="${i}" aria-pressed="${i < used}" aria-label="Uso ${i + 1}"></button>`).join('');
+    const ovBox = (key, label, value, computed) => {
+      const edited = d.ov[key] != null && d.ov[key] !== '';
+      return `<div class="lstat ${edited ? 'edited' : ''}"><input type="number" data-ov="${key}" data-auto="${computed}" value="${value}" aria-label="${esc(label)}"><span>${esc(label)}</span>${edited ? `<button class="mini" data-action="ov-reset" data-id="${key}">auto: ${computed} ↺</button>` : ''}</div>`;
+    };
+    return `<section class="lcard lc-magic"><h3>✨ Quadro de magias</h3>
+      ${sc ? `<div class="sp-top-grid">
+        <div class="lstats small-stats">
+          ${ovBox('spellDc', 'CD de magia', sc.dc, sc.dcComputed)}
+          ${ovBox('spellAtk', 'Ataque mágico', sc.attack, sc.attackComputed)}
+          <div class="lstat static"><b>${R.abilities.find(a => a.id === sc.ability).short}</b><span>Atributo</span></div>
+        </div>
+        <div class="slots"><h4>Espaços de magia</h4>${sc.slotsByLevel.length ? sc.slotsByLevel.map(x => `<div class="slot-row"><span>${x.circle}º círculo${x.pact ? ' (pacto)' : ''}</span>${boxes(x.n, Math.min(x.n, sh.slotsUsed[x.circle] || 0), 'slot', `data-id="${x.circle}"`)}</div>`).join('') : '<p class="muted small">Sem espaços de magia neste nível.</p>'}</div>
+      </div>` : '<p class="muted small">Sua classe não conjura magias por padrão. Se você ganhar magias por espécie, talento ou item, adicione aqui.</p>'}
+      ${preparer && sc ? `<p class="small prep-info ${prepCount > prepLimit ? 'over' : ''}">Preparadas hoje: <b>${prepCount}</b> de <b>${prepLimit}</b> sugeridas (${c.classId === 'paladin' ? 'Carisma + metade do nível' : E.abName(sc.ability) + ' + nível'}). Troque após um descanso longo.</p>` : ''}
+
+      ${circles.length ? circles.map(n => `<div class="sp-group"><h4>${circleName(n)} <span class="count">${sh.spells.filter(x => (Number(x.circle) || 0) === n).length}</span></h4><div class="sp-cards">
+        ${sh.spells.map((x, i) => ({ x, i })).filter(o => (Number(o.x.circle) || 0) === n).map(({ x, i }) => {
+          const srd = x.sid ? R.spells[x.sid] : srdByName(x.name);
+          const canPrep = preparer && n > 0;
+          return `<div class="sp-card ${canPrep && x.prep ? 'prep' : ''} ${canPrep && !x.prep ? 'unprep' : ''}">
+            <div class="sp-head">
+              <input type="text" class="sp-name" data-st="sheet.spells.${i}.name" value="${esc(x.name)}" aria-label="Nome da magia">
+              <button class="mini danger" data-action="sp-del" data-id="${i}" aria-label="Remover ${esc(x.name)}">✕</button>
+            </div>
+            <div class="sp-tags">${srd ? `<span class="tag tag-${srd.tag}">${srd.tag}</span>${srd.ritual ? '<span class="tag">ritual</span>' : ''}` : '<span class="tag">anotada</span>'}
+              ${canPrep ? `<button class="prep-btn ${x.prep ? 'on' : ''}" data-action="sp-prep" data-id="${i}" aria-pressed="${!!x.prep}">${x.prep ? '✓ Preparada' : 'Preparar'}</button>` : ''}</div>
+            ${srd ? `<p class="sp-desc">${esc(srd.desc)}</p>` : ''}
+            <input type="text" class="sp-notes" data-st="sheet.spells.${i}.notes" value="${esc(x.notes)}" placeholder="${srd ? 'Anotações' : 'Resumo: tempo, alcance, efeito, dano…'}" aria-label="Anotações da magia">
+          </div>`;
+        }).join('')}
+      </div></div>`).join('') : '<p class="callout small">Nenhuma magia no quadro ainda.</p>'}
+
+      <div class="sp-add">
+        <h4>Adicionar magia</h4>
+        <div class="row">
+          ${pool.length ? `<select id="spAddSel" aria-label="Magias da lista da classe"><option value="">Da lista da classe…</option>${[0, 1].map(l => `<optgroup label="${circleName(l)}">${pool.filter(x => x.lvl === l).map(x => `<option value="${x.id}">${esc(x.name)} — ${x.tag}</option>`).join('')}</optgroup>`).join('')}</select>
+          <button class="btn sm" data-action="sp-add-list">+ Adicionar</button>` : ''}
+        </div>
+        <div class="row">
+          <input type="text" id="spAddName" list="spellNames" placeholder="Outra magia (ex.: de 2º círculo, de talento…)" aria-label="Nome de outra magia">
+          <select id="spAddCircle" aria-label="Círculo">${Array.from({ length: 10 }, (_, n) => `<option value="${n}" ${n === 1 ? 'selected' : ''}>${n === 0 ? 'Truque' : n + 'º círculo'}</option>`).join('')}</select>
+          <button class="btn sm" data-action="sp-add-free">+ Adicionar</button>
+        </div>
+        <datalist id="spellNames">${Object.values(R.spells).map(x => `<option value="${esc(x.name)}">`).join('')}</datalist>
+        <button class="btn sm ghost" data-action="sp-reseed" title="Adiciona as magias escolhidas no assistente que ainda não estão no quadro">↻ Trazer escolhas do assistente</button>
+      </div>
+    </section>`;
+  }
+
+  function abilityPanel(ui, c, d) {
+    const { esc } = ui;
+    const sh = c.sheet;
+    const pc = P.classes[c.classId];
+    const sub = pc && pc.options.find(o => o.id === c.choices.subclass);
+    const boxes = (n, used, i) => Array.from({ length: n }, (_, k) =>
+      `<button class="box ${k < used ? 'used' : ''}" data-action="ab-use" data-id="${i}" data-n="${k}" aria-pressed="${k < used}" aria-label="Uso ${k + 1}"></button>`).join('');
+    // Sugestões da trilha até o nível atual
+    const names = new Set(sh.abilities.map(a => (a.name || '').toLowerCase()));
+    const sugg = [];
+    if (pc) P.track(c.classId, c.choices.subclass).filter(r => r.lv >= 2 && r.lv <= d.level).forEach(r => r.items.forEach(it => {
+      if (!['class', 'sub', 'pick'].includes(it.k)) return;
+      let name = it.t, src = 'Classe';
+      if (it.k === 'pick') { name = sub ? sub.name : `${pc.term} (escolha no livro)`; src = 'Caminho'; }
+      if (it.k === 'sub') { name = sub ? `${sub.name} (nível ${r.lv})` : `Habilidade do caminho (nível ${r.lv})`; src = 'Caminho'; }
+      if (!names.has(name.toLowerCase())) sugg.push({ lv: r.lv, name, src });
+    }));
+    const autoCards = d.features.map(f => `<div class="ab-card auto"><div class="ab-h"><b>${esc(f.name)}</b><span class="src-chip">${esc(f.src)}</span></div>${f.desc ? `<p>${esc(f.desc)}</p>` : ''}</div>`).join('');
+    const mine = sh.abilities.map((a, i) => {
+      const max = Math.max(0, Math.min(20, parseInt(a.max, 10) || 0));
+      return `<div class="ab-card mine">
+        <div class="ab-h">
+          <input type="text" class="ab-name" data-st="sheet.abilities.${i}.name" value="${esc(a.name)}" placeholder="Nome da habilidade" aria-label="Nome da habilidade">
+          <button class="mini danger" data-action="row-del" data-list="abilities" data-id="${i}" aria-label="Remover habilidade">✕</button>
+        </div>
+        <div class="ab-meta">
+          <label>Nível <input type="number" min="1" max="20" class="w-xs" data-st="sheet.abilities.${i}.level" value="${esc(a.level)}"></label>
+          <label>Origem <select data-sel="sheet.abilities.${i}.src">${AB_SOURCES.map(x => `<option ${a.src === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+          <label>Usos <input type="number" min="0" max="20" class="w-xs" data-st="sheet.abilities.${i}.max" data-rr="1" value="${esc(a.max)}" placeholder="—"></label>
+          ${max ? `<label>por <select data-sel="sheet.abilities.${i}.per">${PERS.map(x => `<option ${a.per === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>` : ''}
+        </div>
+        ${max ? `<div class="ab-uses">${boxes(max, Math.min(max, Number(sh.abUsed[i]) || 0), i)}</div>` : ''}
+        <textarea rows="3" data-st="sheet.abilities.${i}.desc" placeholder="Com suas palavras: o que faz, quando usar, alcance, dano…" aria-label="Descrição">${esc(a.desc)}</textarea>
+      </div>`;
+    }).join('');
+    return `<section class="lcard lc-feats"><h3>📜 Habilidades de classe e características</h3>
+      <div class="ab-tabs">
+        <h4>Suas habilidades <span class="count">${sh.abilities.length}</span></h4>
+        ${sugg.length ? `<div class="ab-sugg"><span class="small muted">Ganhou até o nível ${d.level} — clique para criar o cartão:</span><div class="chips small">${sugg.map(x => `<button class="chip" data-action="ab-suggest" data-id="${esc(x.name)}" data-src="${x.src}" data-lv="${x.lv}">+ Nv ${x.lv}: ${esc(x.name)}</button>`).join('')}</div></div>` : ''}
+        <div class="ab-grid">${mine || '<p class="muted small">Nenhuma habilidade adicionada. Use as sugestões acima ou “+ Nova habilidade”.</p>'}</div>
+        <button class="btn sm" data-action="row-add" data-list="abilities">+ Nova habilidade</button>
+        <h4>Do assistente (classe, caminho, espécie e antecedente) <span class="count">${d.features.length}</span></h4>
+        <div class="ab-grid">${autoCards}</div>
+      </div>
+    </section>`;
   }
 
   function render(ui, id) {
@@ -66,31 +209,10 @@
     const skills = d.skills.map(s => `<li><button class="skl ${s.exp ? 'exp' : s.prof ? 'prof' : ''}" data-action="skill-cycle" data-id="${s.id}" title="Clique para alternar: sem treino → treinada → especialização">${s.exp ? '◆' : s.prof ? '●' : '○'}</button>
       <span>${s.name} <small>${R.abilities.find(a => a.id === s.ab).short}</small></span><b>${sign(s.bonus)}</b></li>`).join('');
 
-    // Magias
-    const sc = d.spellcasting;
-    const spellName = sid => (R.spells[sid] || { name: sid }).name;
-    let magic = '';
-    const known = sc ? [...new Set([...c.choices.cantrips, ...c.choices.spells, ...c.choices.prepared, ...sc.always])] : [];
-    const raceSp = d.raceCantrips.map(r => r.id);
-    if (sc || raceSp.length || sh.extraSpells.length) {
-      magic = `<section class="lcard lc-magic"><h3>✨ Magias</h3>
-        ${sc ? `<div class="lstats small-stats">
-          ${ovBox('spellDc', 'CD de magia', sc.dc, sc.dcComputed, 'cdmagia')}
-          ${ovBox('spellAtk', 'Ataque mágico', sc.attack, sc.attackComputed, 'ataquemagico')}
-          <div class="lstat static"><b>${R.abilities.find(a => a.id === sc.ability).short}</b><span>Atributo</span></div>
-        </div>
-        <div class="slots">${sc.slotsByLevel.length ? sc.slotsByLevel.map(s => `<div class="slot-row"><span>${s.circle}º círculo${s.pact ? ' (pacto)' : ''}</span>${boxes(s.n, Math.min(s.n, sh.slotsUsed[s.circle] || 0), 'slot', `data-id="${s.circle}"`)}</div>`).join('') : '<p class="muted small">Sem espaços de magia neste nível.</p>'}</div>` : ''}
-        ${known.length || raceSp.length ? `<p class="small"><b>Do assistente:</b> ${[...known, ...raceSp].filter(x => R.spells[x]).map(x => `${spellName(x)}${R.spells[x].lvl === 0 ? ' <small>(truque)</small>' : ''}`).join(', ')}</p>` : ''}
-        <h4>Magias adicionadas</h4>
-        <div class="rows">${sh.extraSpells.map((s, i) => `<div class="row">
-          <input type="text" list="spellNames" data-st="sheet.extraSpells.${i}.name" value="${esc(s.name)}" placeholder="Nome da magia" aria-label="Nome da magia">
-          <input type="text" class="w-sm" data-st="sheet.extraSpells.${i}.circle" value="${esc(s.circle)}" placeholder="Círculo" aria-label="Círculo">
-          <input type="text" data-st="sheet.extraSpells.${i}.notes" value="${esc(s.notes)}" placeholder="Notas (preparada, ritual…)" aria-label="Notas">
-          <button class="mini danger" data-action="row-del" data-list="extraSpells" data-id="${i}" aria-label="Remover magia">✕</button></div>`).join('')}</div>
-        <button class="btn sm" data-action="row-add" data-list="extraSpells">+ Magia</button>
-        <datalist id="spellNames">${Object.values(R.spells).map(s => `<option value="${esc(s.name)}">`).join('')}</datalist>
-      </section>`;
-    }
+    // Quadros de magias e de habilidades
+    if (!sh.spellsInit) { sh.spells = seedSpells(c, d); sh.extraSpells = []; sh.spellsInit = true; if (ui.save) ui.save(); }
+    const magic = spellPanel(ui, c, d);
+    const abilitiesHTML = abilityPanel(ui, c, d);
 
     const html = `<section class="page live-page">
       <div class="sheet-actions no-print">
@@ -169,6 +291,8 @@
 
         ${magic}
 
+        ${abilitiesHTML}
+
         <section class="lcard lc-res"><h3>🔋 Recursos</h3>
           ${d.resources.length ? d.resources.map(r => {
             const used = Math.min(r.uses, Number(sh.resUsed[r.key]) || 0);
@@ -181,11 +305,6 @@
             <select data-sel="sheet.customRes.${i}.per" aria-label="Recupera em">${['descanso curto', 'descanso longo', 'dia'].map(p => `<option ${r.per === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
             <button class="mini danger" data-action="row-del" data-list="customRes" data-id="${i}" aria-label="Remover recurso">✕</button></div>`).join('')}</div>
           <button class="btn sm" data-action="row-add" data-list="customRes">+ Recurso</button>
-        </section>
-
-        <section class="lcard lc-feats"><h3>📜 Habilidades e características</h3>
-          <details><summary>Do assistente (${d.features.length})</summary><ul class="feat-list">${d.features.map(f => `<li><strong>${esc(f.name)}</strong> <small>(${esc(f.src)})</small>${f.desc ? ' — ' + esc(f.desc) : ''}</li>`).join('')}</ul></details>
-          <label class="field"><span>Novas habilidades, talentos, caminho, itens mágicos…</span><textarea rows="6" data-st="sheet.features" placeholder="Ex.: Nv 3 — Colégio da Bravura: proficiência em armadura média e escudos…">${esc(sh.features)}</textarea></label>
         </section>
 
         <section class="lcard lc-eq"><h3>🎒 Equipamento e dinheiro</h3>
@@ -257,21 +376,44 @@
       case 'res': { const n = Number(el.dataset.n); sh.resUsed[id] = toggleBoxes(Number(sh.resUsed[id]) || 0, n); return true; }
       case 'rest-short':
         d.resources.filter(r => r.per === 'descanso curto').forEach(r => { sh.resUsed[r.key] = 0; });
+        sh.abilities.forEach((a, i) => { if (a.per === 'descanso curto') sh.abUsed[i] = 0; });
         if (c.classId === 'warlock') sh.slotsUsed = {};
         ui.toast('Descanso curto: recursos de descanso curto recuperados. Gaste Dados de Vida para curar, se quiser.');
         return true;
       case 'rest-long':
-        sh.hpCurrent = d.hp; sh.hpTemp = 0; sh.slotsUsed = {}; sh.resUsed = {}; sh.death = { s: 0, f: 0 };
+        sh.hpCurrent = d.hp; sh.hpTemp = 0; sh.slotsUsed = {}; sh.resUsed = {}; sh.abUsed = {}; sh.death = { s: 0, f: 0 };
         sh.hdUsed = Math.max(0, (Number(sh.hdUsed) || 0) - Math.max(1, Math.floor(d.level / 2)));
         ui.toast('Descanso longo: PV, espaços de magia e recursos recuperados.');
         return true;
       case 'row-add': {
-        const blank = { customAttacks: { name: '', bonus: '', damage: '', notes: '' }, customItems: { name: '', qty: 1, notes: '' }, extraSpells: { name: '', circle: '', notes: '' }, customRes: { name: '', max: 1, per: 'descanso longo' } }[el.dataset.list];
+        const blank = { customAttacks: { name: '', bonus: '', damage: '', notes: '' }, customItems: { name: '', qty: 1, notes: '' }, extraSpells: { name: '', circle: '', notes: '' }, customRes: { name: '', max: 1, per: 'descanso longo' }, abilities: { name: '', level: d.level, src: 'Classe', max: '', per: 'descanso longo', desc: '' } }[el.dataset.list];
         sh[el.dataset.list].push(blank);
         ui.afterRender = () => { const rows = document.querySelectorAll(`[data-st^="sheet.${el.dataset.list}."]`); const last = [...rows].reverse().find(r => r.dataset.st.endsWith('.name')); if (last) last.focus(); };
         return true;
       }
-      case 'row-del': sh[el.dataset.list].splice(Number(id), 1); return true;
+      case 'row-del': sh[el.dataset.list].splice(Number(id), 1); if (el.dataset.list === 'abilities') sh.abUsed = {}; return true;
+      case 'ab-use': { const n = Number(el.dataset.n); sh.abUsed[id] = toggleBoxes(Number(sh.abUsed[id]) || 0, n); return true; }
+      case 'ab-suggest':
+        sh.abilities.push({ name: id, level: el.dataset.lv, src: el.dataset.src, max: '', per: 'descanso longo', desc: '' });
+        ui.afterRender = () => { const t = document.querySelector(`[data-st="sheet.abilities.${sh.abilities.length - 1}.desc"]`); if (t) t.focus(); };
+        return true;
+      case 'sp-prep': sh.spells[id].prep = !sh.spells[id].prep; return true;
+      case 'sp-del': sh.spells.splice(Number(id), 1); return true;
+      case 'sp-add-list': {
+        const sid = document.getElementById('spAddSel').value;
+        if (!sid) { ui.toast('Escolha uma magia na lista.'); return false; }
+        sh.spells.push({ sid, name: R.spells[sid].name, circle: R.spells[sid].lvl, prep: !PREPARERS.includes(c.classId), notes: '' });
+        return true;
+      }
+      case 'sp-add-free': {
+        const name = document.getElementById('spAddName').value.trim();
+        if (!name) { ui.toast('Digite o nome da magia.'); return false; }
+        const srd = srdByName(name);
+        sh.spells.push({ sid: srd ? srd.id : '', name: srd ? srd.name : name, circle: srd ? srd.lvl : Number(document.getElementById('spAddCircle').value), prep: !PREPARERS.includes(c.classId), notes: '' });
+        if (!srd) ui.afterRender = () => { const t = document.querySelector(`[data-st="sheet.spells.${sh.spells.length - 1}.notes"]`); if (t) t.focus(); };
+        return true;
+      }
+      case 'sp-reseed': { const before = sh.spells.length; sh.spells = seedSpells(c, d, sh.spells); ui.toast(sh.spells.length > before ? `${sh.spells.length - before} magia(s) trazida(s) do assistente.` : 'O quadro já tem todas as magias do assistente.'); return true; }
       case 'rm-item': sh.removedItems.push(id); return true;
       case 'restore-items': sh.removedItems = []; return true;
       case 'print-live': document.getElementById('printSheet').innerHTML = ui.sheetHTML(c); window.print(); return false;
@@ -279,5 +421,5 @@
     return null; // não é uma ação da ficha
   }
 
-  CF.sheetTab = { render, action, ensureSheet };
+  CF.sheetTab = { render, action, ensureSheet, seedSpells };
 })();

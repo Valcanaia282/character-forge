@@ -19,7 +19,8 @@ CF.engine = (function () {
       level: 1, xp: 0, hpCurrent: null, hpTemp: 0, hdUsed: 0, death: { s: 0, f: 0 }, inspiration: false,
       conditions: [], slotsUsed: {}, resUsed: {}, ov: {}, skillProf: {}, skillExp: {}, saveProf: {},
       customAttacks: [], customItems: [], removedItems: [], extraSpells: [], customRes: [],
-      coins: { pc: 0, pp: 0, pe: 0, po: 0, pl: 0 }, coinsInit: false, features: '', profsExtra: '', notes: ''
+      coins: { pc: 0, pp: 0, pe: 0, po: 0, pl: 0 }, coinsInit: false, features: '', profsExtra: '', notes: '',
+      spells: [], spellsInit: false, abilities: [], abUsed: {}
     };
   }
   const profByLevel = lv => 2 + Math.floor((Math.min(12, Math.max(1, lv)) - 1) / 4);

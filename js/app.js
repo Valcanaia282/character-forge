@@ -689,6 +689,17 @@
       rows.push(`<ul class="sp-list">${ids.map(id => `<li><b>${R.spells[id].name}</b> — ${R.spells[id].desc}</li>`).join('')}${extraSp.map(s => `<li><b>${esc(s.name)}</b>${s.circle ? ` (${esc(s.circle)})` : ''}${s.notes ? ' — ' + esc(s.notes) : ''}</li>`).join('')}</ul>`);
       spells = `<section class="sh-box sh-spells"><h4>Magias</h4>${rows.join('')}</section>`;
     }
+    if (sh.spellsInit) {
+      const list = sh.spells || [];
+      const prepr = ['cleric', 'druid', 'wizard', 'paladin'].includes(c.classId);
+      const circles = [...new Set(list.map(x => Number(x.circle) || 0))].sort((a, b) => a - b);
+      spells = (sc || list.length) ? `<section class="sh-box sh-spells"><h4>Magias</h4>
+        ${sc ? `<p class="sp-stats">Atributo: <b>${E.abName(sc.ability)}</b> · CD <b>${sc.dc}</b> · Ataque <b>${sign(sc.attack)}</b> · Espaços: <b>${sc.slotsByLevel.map(x => `${x.circle}º ${'☐'.repeat(x.n)}`).join(' · ') || '—'}</b>${sc.pact ? ' (pacto: voltam no descanso curto)' : ''}</p>` : ''}
+        <ul class="sp-list">${circles.map(n => `<li class="sp-circle">${n === 0 ? 'Truques' : n + 'º círculo'}</li>${list.filter(x => (Number(x.circle) || 0) === n).map(x => {
+          const srd = x.sid ? R.spells[x.sid] : null;
+          return `<li><b>${prepr && n > 0 ? (x.prep ? '● ' : '○ ') : ''}${esc(x.name)}</b>${srd ? ' — ' + esc(srd.desc) : ''}${x.notes ? ' — ' + esc(x.notes) : ''}</li>`;
+        }).join('')}`).join('')}</ul>${prepr ? '<p class="tiny">● preparada · ○ não preparada</p>' : ''}</section>` : '';
+    }
     return `<article class="sheet" id="sheet">
       <header class="sh-head">
         <div class="sh-name"><h3>${esc(c.name || 'Sem nome')}</h3><small>Nome do personagem</small></div>
@@ -719,7 +730,7 @@
           <section class="sh-box"><h4>Ataques</h4>${d.attacks.length ? `<table class="sh-atk"><thead><tr><th>Arma</th><th>Acerto</th><th>Dano</th></tr></thead><tbody>${d.attacks.map(a => `<tr><td>${a.name}${a.notes.length ? `<small>${a.notes.join('; ')}</small>` : ''}</td><td>${sign(a.bonus)}</td><td>${a.damage}${a.versatile ? `<small>2 mãos: ${a.versatile}</small>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p>—</p>'}</section>
           ${d.resources.length ? `<section class="sh-box"><h4>Recursos</h4><ul class="res">${d.resources.map(r => `<li>${r.name}: ${'☐ '.repeat(Math.max(0, Math.min(r.uses, 10)))}${r.uses > 10 ? r.uses : ''} <small>/ ${r.per}</small></li>`).join('')}</ul></section>` : ''}
           ${spells}
-          <section class="sh-box"><h4>Características e habilidades</h4><ul class="feats">${d.features.map(f => `<li><b>${esc(f.name)}</b> <small>(${esc(f.src)})</small>${f.desc ? ' — ' + esc(f.desc) : ''}</li>`).join('')}</ul>${(sh.features || '').trim() ? `<p class="sh-free">${esc(sh.features).replace(/\n/g, '<br>')}</p>` : ''}</section>
+          <section class="sh-box"><h4>Características e habilidades</h4><ul class="feats">${d.features.map(f => `<li><b>${esc(f.name)}</b> <small>(${esc(f.src)})</small>${f.desc ? ' — ' + esc(f.desc) : ''}</li>`).join('')}</ul>${(sh.abilities || []).filter(a => (a.name || '').trim()).length ? `<ul class="feats sh-free">${sh.abilities.filter(a => (a.name || '').trim()).map(a => `<li><b>${esc(a.name)}</b> <small>(${esc(a.src || 'Outro')}${a.level ? ', nv ' + esc(a.level) : ''}${parseInt(a.max, 10) > 0 ? ', ' + parseInt(a.max, 10) + '×/' + esc(a.per) : ''})</small>${a.desc ? ' — ' + esc(a.desc).replace(/\n/g, '<br>') : ''}</li>`).join('')}</ul>` : ''}${(sh.features || '').trim() ? `<p class="sh-free">${esc(sh.features).replace(/\n/g, '<br>')}</p>` : ''}</section>
         </div>
         <div class="sh-col">
           <section class="sh-box"><h4>Proficiências e idiomas</h4>
@@ -765,7 +776,7 @@
 
   /* ============================================================ Aba Ficha */
   CF.ui = {
-    esc, sign, T, $app, toast, sheetHTML, afterRender: null,
+    esc, sign, T, $app, toast, sheetHTML, afterRender: null, save: () => touch(),
     chars: () => chars, currentId: () => currentId,
     setCurrent(id) { currentId = id; saveChars(); }
   };
