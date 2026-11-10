@@ -169,18 +169,18 @@ CF.RULES = {
     },
     cleric: {
       name: 'Clérigo', hitDie: 8, primary: ['wis'], saves: ['wis', 'cha'],
-      armor: ['light', 'medium', 'heavy', 'shield'], weapons: ['simple'],
+      armor: ['light', 'medium', 'shield'], weapons: ['simple'],
       skillChoices: 2, skillList: ['history', 'insight', 'medicine', 'persuasion', 'religion'],
       difficulty: 2, role: 'Cura / Suporte',
       tagline: 'Servo de uma divindade que cura aliados, protege o grupo e enfrenta o mal.',
-      howItWorks: 'Prepara magias divinas usando Sabedoria. No SRD, o domínio disponível é o da Vida, focado em cura e com armadura pesada.',
+      howItWorks: 'Prepara magias divinas usando Sabedoria. Escolhe o domínio do seu deus já no 1º nível (Vida, Luz, Guerra, Tempestade…).',
       exampleTurn: 'Ação bônus: Palavra Curativa no amigo caído. Ação: Chama Sagrada no inimigo.',
       suggested: ['wis', 'str', 'con', 'cha', 'int', 'dex'],
-      subclass: { name: 'Domínio da Vida', bonusArmor: ['heavy'], alwaysPrepared: ['bless', 'curewounds'] },
+      subclass: { id: 'life', name: 'Domínio da Vida', alwaysPrepared: ['bless', 'curewounds'] },
       casting: { ability: 'wis', cantrips: 3, slots: [2], type: 'prepared' },
       features: [
-        { name: 'Domínio da Vida', desc: 'Proficiência com armadura pesada. Bênção e Curar Ferimentos estão sempre preparadas (não contam no limite).' },
-        { name: 'Discípulo da Vida', desc: 'Suas magias de cura (de 1º nível ou mais) recuperam 2 + nível da magia PV extras.' },
+        { sub: 'life', name: 'Domínio da Vida', desc: 'Proficiência com armadura pesada. Bênção e Curar Ferimentos estão sempre preparadas (não contam no limite).' },
+        { sub: 'life', name: 'Discípulo da Vida', desc: 'Suas magias de cura (de 1º nível ou mais) recuperam 2 + nível da magia PV extras.' },
         { name: 'Conjuração', desc: 'Conhece 3 truques. Prepara magias da lista de clérigo: modificador de Sabedoria + 1 (mínimo 1). Tem 2 espaços de 1º nível.' }
       ],
       equipment: [
@@ -326,17 +326,16 @@ CF.RULES = {
       armor: [], weapons: ['dagger', 'dart', 'sling', 'quarterstaff', 'lightcrossbow'],
       skillChoices: 2, skillList: ['arcana', 'deception', 'insight', 'intimidation', 'persuasion', 'religion'],
       difficulty: 2, role: 'Dano mágico',
-      tagline: 'Nasceu com magia no sangue. No SRD, a origem é a Linhagem Dracônica.',
-      howItWorks: 'Usa Carisma para conjurar. A herança de dragão dá +1 PV por nível e CA 13 + Destreza sem armadura.',
+      tagline: 'Nasceu com magia no sangue: dragões, deuses, tempestades ou puro caos.',
+      howItWorks: 'Usa Carisma para conjurar. Escolhe a origem da sua magia já no 1º nível (ex.: Linhagem Dracônica dá +1 PV por nível e CA 13 + Destreza).',
       exampleTurn: 'Ação: lançar Raio de Fogo (1d10 de fogo) a até 36 m.',
       suggested: ['cha', 'con', 'dex', 'wis', 'int', 'str'],
-      subclass: { name: 'Linhagem Dracônica', hpPerLevel: 1 },
+      subclass: { id: 'draconic', name: 'Linhagem Dracônica', hpPerLevel: 1, extraLanguages: ['Dracônico'] },
       dragonAncestor: true,
-      extraLanguages: ['Dracônico'],
       casting: { ability: 'cha', cantrips: 4, known: 2, slots: [2], type: 'known' },
       features: [
-        { name: 'Ancestral Dracônico', desc: 'Escolha um tipo de dragão. Você fala Dracônico e, ao fazer testes de Carisma com dragões, dobra o bônus de proficiência.' },
-        { name: 'Resiliência Dracônica', desc: '+1 PV por nível de feiticeiro. Sem armadura, sua CA é 13 + Destreza.' },
+        { sub: 'draconic', name: 'Ancestral Dracônico', desc: 'Escolha um tipo de dragão. Você fala Dracônico e, ao fazer testes de Carisma com dragões, dobra o bônus de proficiência.' },
+        { sub: 'draconic', name: 'Resiliência Dracônica', desc: '+1 PV por nível de feiticeiro. Sem armadura, sua CA é 13 + Destreza.' },
         { name: 'Conjuração', desc: 'Conhece 4 truques e 2 magias de 1º nível. Tem 2 espaços de 1º nível.' }
       ],
       equipment: [
@@ -351,15 +350,15 @@ CF.RULES = {
       armor: ['light'], weapons: ['simple'],
       skillChoices: 2, skillList: ['arcana', 'deception', 'history', 'intimidation', 'investigation', 'nature', 'religion'],
       difficulty: 2, role: 'Dano mágico / Social',
-      tagline: 'Fez um pacto com um ser poderoso. No SRD, o patrono é o Corruptor (Infernal).',
+      tagline: 'Fez um pacto com um ser poderoso: um demônio, uma fada, uma arma amaldiçoada…',
       howItWorks: 'Usa Carisma. Tem poucos espaços de magia, mas eles voltam num descanso curto. Rajada Mística é o truque de dano mais confiável.',
       exampleTurn: 'Ação: Rajada Mística (1d10 de força) a até 36 m.',
       suggested: ['cha', 'con', 'dex', 'wis', 'int', 'str'],
-      subclass: { name: 'O Corruptor', expanded: ['burninghands', 'command'] },
+      subclass: { id: 'fiend', name: 'O Corruptor', expanded: ['burninghands', 'command'] },
       casting: { ability: 'cha', cantrips: 2, known: 2, slots: [1], type: 'known', pact: true },
       features: [
-        { name: 'Patrono: O Corruptor', desc: 'Mãos Flamejantes e Comando entram na sua lista de magias de bruxo.' },
-        { name: 'Bênção do Obscuro', desc: 'Quando você reduz uma criatura hostil a 0 PV, ganha PV temporários = modificador de Carisma + nível de bruxo (mínimo 1).' },
+        { sub: 'fiend', name: 'Patrono: O Corruptor', desc: 'Mãos Flamejantes e Comando entram na sua lista de magias de bruxo.' },
+        { sub: 'fiend', name: 'Bênção do Obscuro', desc: 'Quando você reduz uma criatura hostil a 0 PV, ganha PV temporários = modificador de Carisma + nível de bruxo (mínimo 1).' },
         { name: 'Magia de Pacto', desc: 'Conhece 2 truques e 2 magias de 1º nível. Tem 1 espaço de magia, recuperado em descanso curto ou longo.' }
       ],
       equipment: [
