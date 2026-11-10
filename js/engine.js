@@ -18,7 +18,7 @@ CF.engine = (function () {
       id: uid(), version: 1, createdAt: Date.now(), updatedAt: Date.now(), step: 0,
       name: '', player: '', concept: '', classId: '', raceId: '', backgroundId: '',
       abilities: { method: 'standard', standard: { str: null, dex: null, con: null, int: null, wis: null, cha: null }, pointbuy: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, manual: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } },
-      choices: { classSkills: [], raceSkills: [], bgSkills: [], raceLangs: [], bgLangs: [], bgToolLang: [], tools: [], raceTool: '', fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], dragon: '', sorcDragon: '', halfElfAsi: [], elfCantrip: '', cantrips: [], spells: [], prepared: [], bgIdea: '' },
+      choices: { classSkills: [], raceSkills: [], bgSkills: [], raceLangs: [], bgLangs: [], bgToolLang: [], tools: [], raceTool: '', fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], dragon: '', sorcDragon: '', halfElfAsi: [], elfCantrip: '', cantrips: [], spells: [], prepared: [], bgIdea: '', subclass: '' },
       equipment: { groups: {}, picks: {} },
       story: { alignment: '', age: '', appearance: '', motivation: '', fear: '', trust: '', goal: '', secret: '', traits: '', ideals: '', bonds: '', flaws: '', backstory: '' }
     };
@@ -61,6 +61,19 @@ CF.engine = (function () {
     const order = cls ? cls.suggested : AB;
     // 15,14,13,12,10,8 custa exatamente 27 pontos.
     return suggestStandard(classId);
+  }
+
+  /* ------------------------------------------------------------- Caminhos */
+  /** Caminho (subclasse) escolhido, segundo CF.PATHS. */
+  function pathInfo(c) {
+    const pc = CF.PATHS && CF.PATHS.classes[c.classId];
+    if (!pc) return null;
+    return { term: pc.term, pickLevel: pc.pickLevel, option: pc.options.find(o => o.id === c.choices.subclass) || null, data: pc };
+  }
+  /** Subclasse do SRD com efeitos calculados — só se for a escolhida. */
+  function activeSub(c) {
+    const cls = R.classes[c.classId];
+    return cls && cls.subclass && c.choices.subclass === cls.subclass.id ? cls.subclass : null;
   }
 
   /* ---------------------------------------------------------- Equipamento */
@@ -106,9 +119,12 @@ CF.engine = (function () {
   function proficiencies(c) {
     const cls = R.classes[c.classId], race = R.races[c.raceId], bg = R.backgrounds[c.backgroundId];
     const armor = new Set(cls ? cls.armor : []);
-    if (cls && cls.subclass && cls.subclass.bonusArmor) cls.subclass.bonusArmor.forEach(a => armor.add(a));
+    const path = pathInfo(c);
+    const grants = path && path.pickLevel === 1 && path.option && path.option.grants;
+    if (grants && grants.armor) grants.armor.forEach(a => armor.add(a));
     const weapons = new Set(cls ? cls.weapons : []);
     if (race && race.weapons) race.weapons.forEach(w => weapons.add(w));
+    if (grants && grants.weapons) grants.weapons.forEach(w => weapons.add(w));
 
     const skills = new Map(); // id -> origem
     const add = (id, src) => { if (id && !skills.has(id)) skills.set(id, src); };
@@ -121,6 +137,8 @@ CF.engine = (function () {
     const languages = new Set(race ? race.languages : ['Comum']);
     [...(c.choices.raceLangs || []), ...(c.choices.bgLangs || [])].forEach(l => l && languages.add(l));
     if (cls && cls.extraLanguages) cls.extraLanguages.forEach(l => languages.add(l));
+    const sub = activeSub(c);
+    if (sub && sub.extraLanguages) sub.extraLanguages.forEach(l => languages.add(l));
     const tools = [];
     if (cls && cls.fixedTools) tools.push(...cls.fixedTools);
     if (cls && cls.toolChoices) c.choices.tools.forEach(t => t && tools.push(t));
@@ -144,10 +162,12 @@ CF.engine = (function () {
     const m = {}; AB.forEach(k => { m[k] = mod(s[k]); });
     const p = proficiencies(c);
     const items = equipmentItems(c);
+    const sub = activeSub(c);
+    const path = pathInfo(c);
 
     // PV
     let hp = null;
-    if (cls) hp = Math.max(1, cls.hitDie + m.con + (race && race.hpPerLevel ? race.hpPerLevel : 0) + (cls.subclass && cls.subclass.hpPerLevel ? cls.subclass.hpPerLevel : 0));
+    if (cls) hp = Math.max(1, cls.hitDie + m.con + (race && race.hpPerLevel ? race.hpPerLevel : 0) + (sub && sub.hpPerLevel ? sub.hpPerLevel : 0));
 
     // CA: avalia todas as formas possíveis e usa a melhor
     const bodyArmors = items.filter(i => R.armor[i] && R.armor[i].cat !== 'shield');
@@ -158,10 +178,10 @@ CF.engine = (function () {
     acOptions.push({ v: 10 + m.dex + sb, label: 'Sem armadura (10 + DES' + shieldTxt + ')', armor: null });
     if (c.classId === 'barbarian') acOptions.push({ v: 10 + m.dex + m.con + sb, label: 'Defesa sem Armadura (10 + DES + CON' + shieldTxt + ')', armor: null });
     if (c.classId === 'monk') acOptions.push({ v: 10 + m.dex + m.wis, label: 'Defesa sem Armadura (10 + DES + SAB, sem escudo)', armor: null });
-    if (c.classId === 'sorcerer') acOptions.push({ v: 13 + m.dex + sb, label: 'Resiliência Dracônica (13 + DES' + shieldTxt + ')', armor: null });
+    if (c.classId === 'sorcerer' && sub) acOptions.push({ v: 13 + m.dex + sb, label: 'Resiliência Dracônica (13 + DES' + shieldTxt + ')', armor: null });
     bodyArmors.forEach(id => {
       const a = R.armor[id];
-      const dex = a.dexMax == null ? m.dex : Math.min(m.dex, a.dexMax);
+      const dex = a.cat === 'heavy' ? 0 : a.dexMax == null ? m.dex : Math.min(m.dex, a.dexMax); // armadura pesada ignora Destreza
       let v = a.base + dex + sb;
       let label = a.name + shieldTxt;
       if (c.choices.fightingStyle === 'defense' && c.classId === 'fighter') { v += 1; label += ' + estilo Defesa'; }
@@ -230,7 +250,7 @@ CF.engine = (function () {
         cantrips: k.cantrips, known: k.known || 0, spellbook: k.spellbook || 0,
         prepared: (k.type === 'prepared' || k.type === 'spellbook') ? Math.max(1, am + 1) : 0,
         slots: k.slots, type: k.type, pact: !!k.pact,
-        always: (cls.subclass && cls.subclass.alwaysPrepared) || []
+        always: (sub && sub.alwaysPrepared) || []
       };
     }
     // Truques de espécie
@@ -240,7 +260,11 @@ CF.engine = (function () {
 
     // Características
     const features = [];
-    if (cls) cls.features.forEach(f => features.push({ ...f, src: cls.name }));
+    if (cls) cls.features.filter(f => !f.sub || f.sub === c.choices.subclass).forEach(f => features.push({ ...f, src: cls.name }));
+    if (path && path.option && path.pickLevel === 1 && !path.option.srd) {
+      const srcName = CF.PATHS.sources[path.option.src].name;
+      features.push({ name: path.option.name, desc: `Habilidades de 1º nível deste caminho: veja ${srcName}, p. ${path.option.page}, e anote aqui com o mestre (não são calculadas automaticamente).`, src: cls.name });
+    }
     if (cls && cls.fightingStyle && c.choices.fightingStyle) {
       const fs = R.fightingStyles.find(f => f.id === c.choices.fightingStyle);
       if (fs) features.push({ name: 'Estilo: ' + fs.name, desc: fs.desc, src: cls.name });
@@ -249,7 +273,7 @@ CF.engine = (function () {
       if (c.choices.favoredEnemy) features.push({ name: 'Inimigo favorito: ' + c.choices.favoredEnemy, desc: '', src: cls.name });
       if (c.choices.terrain) features.push({ name: 'Terreno favorito: ' + c.choices.terrain, desc: '', src: cls.name });
     }
-    if (cls && cls.dragonAncestor && c.choices.sorcDragon) {
+    if (cls && cls.dragonAncestor && sub && c.choices.sorcDragon) {
       const d = R.dragons.find(x => x.id === c.choices.sorcDragon);
       if (d) features.push({ name: 'Ancestral: dragão ' + d.name, desc: 'Tipo de dano associado: ' + d.dmg + '.', src: cls.name });
     }
@@ -271,7 +295,7 @@ CF.engine = (function () {
     if (c.raceId === 'halforc') resources.push({ name: 'Resistência Implacável', uses: 1, per: 'descanso longo' });
 
     return {
-      ready, scores: s, rawScores: scores, mods: m, prof: PB, hp, hitDie: cls ? 'd' + cls.hitDie : '—',
+      ready, path, scores: s, rawScores: scores, mods: m, prof: PB, hp, hitDie: cls ? 'd' + cls.hitDie : '—',
       ac: best.v, acLabel: best.label, acOptions, wornArmor, speed, speedNote,
       initiative: m.dex, passivePerception: 10 + perception,
       skills, saves, attacks, spellcasting, raceCantrips, features, resources,
@@ -282,9 +306,9 @@ CF.engine = (function () {
   }
 
   /* -------------------------------------------------------- Listas de magia */
-  function spellList(classId, lvl) {
+  function spellList(classId, lvl, subId) {
     const cls = R.classes[classId];
-    const extra = cls && cls.subclass && cls.subclass.expanded ? cls.subclass.expanded : [];
+    const extra = cls && cls.subclass && cls.subclass.expanded && cls.subclass.id === subId ? cls.subclass.expanded : [];
     return Object.entries(R.spells)
       .filter(([id, sp]) => sp.lvl === lvl && (sp.cls.includes(classId) || extra.includes(id)))
       .map(([id, sp]) => ({ id, ...sp }));
@@ -300,6 +324,9 @@ CF.engine = (function () {
 
     if (!c.name.trim()) err(0, 'Dê um nome ao personagem.');
     if (!cls) err(1, 'Escolha uma classe.');
+    const path = pathInfo(c);
+    if (path && path.pickLevel === 1 && !path.option) err(1, `O ${cls.name} escolhe ${path.term.toLowerCase()} já no 1º nível: escolha um caminho.`);
+    if (path && path.pickLevel === 1 && path.option && !path.option.srd) warn(1, `${path.option.name}: as habilidades de 1º nível deste caminho não são calculadas automaticamente. Anote-as do livro (p. ${path.option.page}) com o mestre.`);
     if (!race) err(2, 'Escolha uma espécie.');
     if (!bg) err(3, 'Escolha um antecedente.');
 
@@ -343,7 +370,7 @@ CF.engine = (function () {
       if (cls.fightingStyle && !ch.fightingStyle) err(5, 'Escolha um Estilo de Luta.');
       if (cls.favoredEnemy && (!ch.favoredEnemy || !ch.terrain)) err(5, 'Escolha inimigo favorito e terreno favorito.');
       if (cls.expertise && ch.expertise.length !== cls.expertise) err(5, 'Escolha ' + cls.expertise + ' especializações.');
-      if (cls.dragonAncestor && !ch.sorcDragon) err(5, 'Escolha seu ancestral dracônico.');
+      if (cls.dragonAncestor && activeSub(c) && !ch.sorcDragon) err(5, 'Escolha seu ancestral dracônico.');
     }
     if (race && race.skillChoices && ch.raceSkills.length !== race.skillChoices) err(2, 'Escolha ' + race.skillChoices + ' perícias da espécie.');
     // Duplicatas
@@ -384,5 +411,5 @@ CF.engine = (function () {
     return out;
   }
 
-  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, proficiencies, weaponProficient, derive, spellList, validate };
+  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, pathInfo, activeSub, proficiencies, weaponProficient, derive, spellList, validate };
 })();

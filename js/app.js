@@ -46,6 +46,8 @@
   let party = load('cf.party', { name: 'Minha campanha', members: [], bonds: [] });
   let quiz = { i: 0, scores: {}, done: false };
   let tut = null;
+  let trail = { cls: 'fighter', sub: '' };
+  const P = CF.PATHS;
 
   function migrate(c) {
     const base = E.newCharacter();
@@ -108,6 +110,7 @@
       case 'personagens': return renderList();
       case 'ficha': return renderSheetPage(arg);
       case 'quiz': return renderQuiz();
+      case 'trilhas': return renderTrails();
       case 'grupo': return renderParty();
       case 'tutorial': return renderTutorial();
       case 'glossario': return renderGlossary();
@@ -132,6 +135,7 @@
     </section>
     <section class="home-grid">
       <a class="home-card" href="#/quiz"><span class="hc-icon">🧭</span><h2>Descubra seu aventureiro</h2><p>5 perguntas rápidas e recomendamos as classes que combinam com você.</p></a>
+      <a class="home-card" href="#/trilhas"><span class="hc-icon">🗺️</span><h2>Trilhas até o nível 12</h2><p>Veja todos os caminhos (subclasses) de cada classe e o que você ganha a cada nível.</p></a>
       <a class="home-card" href="#/tutorial"><span class="hc-icon">🗡️</span><h2>Tutorial de combate</h2><p>Enfrente um goblin e aprenda turnos, ataques, CA e dano na prática.</p></a>
       <a class="home-card" href="#/grupo"><span class="hc-icon">🏰</span><h2>Montar o grupo</h2><p>Para o mestre: reúna as fichas dos amigos e crie vínculos entre os personagens.</p></a>
       <a class="home-card" href="#/glossario"><span class="hc-icon">📚</span><h2>Glossário</h2><p>CA, PV, vantagem, truque… tudo explicado sem complicação.</p></a>
@@ -237,8 +241,53 @@
       </dl>
       <p><strong>Como funciona:</strong> ${cls.howItWorks}</p>
       <p class="example"><strong>Exemplo de turno:</strong> ${cls.exampleTurn}</p>
-      <details><summary>Habilidades de 1º nível</summary><ul class="feat-list">${cls.features.map(f => `<li><strong>${f.name}.</strong> ${f.desc}</li>`).join('')}</ul></details>
-    </article>` : ''}`;
+      <details><summary>Habilidades de 1º nível</summary><ul class="feat-list">${cls.features.filter(f => !f.sub || f.sub === c.choices.subclass).map(f => `<li><strong>${f.name}.</strong> ${f.desc}</li>`).join('')}</ul></details>
+    </article>
+    ${pathSection(c.classId, c.choices.subclass, true)}` : ''}`;
+  }
+
+  /* --------------------------------------------------------------- Caminhos */
+  const srcBadge = o => `<span class="src src-${o.src}" title="${esc(P.sources[o.src].name)}">${P.sources[o.src].short} p. ${o.page}</span>`;
+  function pathCard(o, on, action) {
+    return `<button class="card path ${on ? 'selected' : ''}" data-action="${action}" data-id="${o.id}" aria-pressed="${on}">
+      <span class="path-badges">${srcBadge(o)}${o.beginner ? '<span class="badge">bom para iniciantes</span>' : ''}${o.srd ? '<span class="badge calc">calculado na ficha</span>' : ''}</span>
+      <strong>${esc(o.name)}</strong><span>${esc(o.pitch)}</span>
+      <span class="path-rumo"><b>Até o nível 12:</b> ${esc(o.rumo)}</span>
+      <span class="card-meta">${o.roles.map(r => P.roleNames[r]).join(' · ')}</span></button>`;
+  }
+  function trackHTML(classId, subId, compact) {
+    const tr = P.track(classId, subId);
+    return `<ol class="track ${compact ? 'compact' : ''}">${tr.map(r => `<li class="${r.key ? 'key' : ''}"><span class="lv">Nv ${r.lv}</span><ul>${r.items.map(i => `<li class="k-${i.k}">${esc(i.t)}</li>`).join('')}</ul></li>`).join('')}</ol>`;
+  }
+  function pathSection(classId, subId, inCreator) {
+    const pc = P.classes[classId], cls = R.classes[classId];
+    if (!pc) return '';
+    const sub = pc.options.find(o => o.id === subId);
+    const term = pc.term.toLowerCase();
+    const intro = pc.pickLevel === 1
+      ? `O ${cls.name} escolhe o ${term} <strong>já no 1º nível</strong>${inCreator ? ' — escolha agora:' : '.'}`
+      : `O ${cls.name} escolhe o ${term} no <strong>${pc.pickLevel}º nível</strong>.${inCreator ? ' Você já pode marcar o caminho que pretende seguir: ele aparece na ficha como <em>planejado</em>, e o mestre fica sabendo para onde o personagem vai.' : ''}`;
+    const sorted = pc.options.slice().sort((a, b) => (b.srd ? 1 : 0) - (a.srd ? 1 : 0) || (a.src === b.src ? 0 : a.src === 'ldj' ? -1 : 1));
+    return `<section class="paths">
+      <h3>🗺️ Caminhos do ${cls.name}: ${pc.term}</h3>
+      <p>${intro} As habilidades do caminho chegam nos níveis <strong>${pc.featureLevels.join(', ')}</strong> (campanha até o nível ${P.levelCap}).</p>
+      ${pc.note ? `<div class="callout small">${esc(pc.note)}</div>` : ''}
+      <div class="cards cards-3">${sorted.map(o => pathCard(o, o.id === subId, inCreator ? 'set-subclass' : 'trail-sub')).join('')}</div>
+      <p class="muted small">Resumos próprios para ajudar na escolha. As regras completas estão no livro e na página indicados (LdJ = Livro do Jogador; Xanathar = Guia de Xanathar para Todas as Coisas).</p>
+      <details class="track-wrap" ${sub || !inCreator ? 'open' : ''}><summary>Sua trilha do nível 1 ao ${P.levelCap}${sub ? ' — ' + esc(sub.name) : ''}</summary>${trackHTML(classId, subId)}</details>
+    </section>`;
+  }
+
+  function renderTrails() {
+    const pc = P.classes[trail.cls], cls = R.classes[trail.cls];
+    $app.innerHTML = `<section class="page">
+      <p class="eyebrow">Trilhas até o nível ${P.levelCap}</p><h1>Para onde cada classe vai</h1>
+      <p class="intro">Escolha uma classe para ver os caminhos (subclasses) do Livro do Jogador e do Guia de Xanathar e o que o personagem ganha a cada nível. Clique num caminho para destacá-lo na trilha.</p>
+      <div class="chips class-pills" role="tablist">${Object.keys(R.classes).map(id => `<button role="tab" class="chip ${trail.cls === id ? 'on' : ''}" aria-selected="${trail.cls === id}" data-action="trail-class" data-id="${id}">${R.classes[id].name}</button>`).join('')}</div>
+      <article class="detail"><h2>${cls.name}</h2><p>${cls.tagline}</p><p class="muted">${stars(cls.difficulty)} ${diffLabel(cls.difficulty)} · ${cls.role} · escolhe o caminho no ${pc.pickLevel}º nível</p></article>
+      ${pathSection(trail.cls, trail.sub, false)}
+      <div class="sheet-actions"><button class="btn primary" data-action="trail-create">Criar um ${cls.name}${trail.sub ? ' (' + esc(pc.options.find(o => o.id === trail.sub).name) + ')' : ''}</button></div>
+    </section>`;
   }
 
   /* ----------------------------------------------------------------- Etapa 3 */
@@ -444,12 +493,14 @@
         <p class="muted">Escolha 2 entre as perícias que você já domina: o bônus delas dobra.</p>
         <div class="chips">${opts.map(o => { const on = c.choices.expertise.includes(o.id); return `<button class="chip ${on ? 'on' : ''}" data-action="toggle-list" data-list="expertise" data-id="${o.id}" data-max="${cls.expertise}" aria-pressed="${on}" ${!on && c.choices.expertise.length >= cls.expertise ? 'disabled' : ''}>${o.name}</button>`; }).join('')}</div></section>`);
     }
-    if (cls.dragonAncestor) {
+    if (cls.dragonAncestor && E.activeSub(c)) {
       out.push(`<section><h3>Ancestral dracônico</h3><div class="chips">${R.dragons.map(dr => `<button class="chip ${c.choices.sorcDragon === dr.id ? 'on' : ''}" data-action="set-choice" data-key="sorcDragon" data-id="${dr.id}" aria-pressed="${c.choices.sorcDragon === dr.id}">${dr.name} · ${dr.dmg}</button>`).join('')}</div></section>`);
     }
 
     // Habilidades da classe
-    out.push(`<section><h3>O que seu ${cls.name} sabe fazer</h3><ul class="feat-list">${cls.features.map(f => `<li><strong>${f.name}.</strong> ${f.desc}</li>`).join('')}</ul></section>`);
+    const pth = d.path;
+    if (pth && pth.option) out.push(`<div class="callout small">🗺️ ${pth.pickLevel === 1 ? 'Caminho' : 'Caminho planejado'}: <strong>${esc(pth.option.name)}</strong> ${srcBadge(pth.option)}${pth.pickLevel > 1 ? ` — escolhido de fato no ${pth.pickLevel}º nível.` : (pth.option.srd ? ' — já calculado na ficha.' : ' — anote as habilidades de 1º nível do livro com o mestre.')}</div>`);
+    out.push(`<section><h3>O que seu ${cls.name} sabe fazer</h3><ul class="feat-list">${cls.features.filter(f => !f.sub || f.sub === c.choices.subclass).map(f => `<li><strong>${f.name}.</strong> ${f.desc}</li>`).join('')}</ul></section>`);
 
     // Magias
     const sc = d.spellcasting;
@@ -462,7 +513,7 @@
           ${T('truque', 'Truques')} podem ser usados à vontade.</div>`);
       const cantrips = E.spellList(c.classId, 0);
       out.push(spellGroup('Truques', 'cantrips', cantrips, c.choices.cantrips, sc.cantrips));
-      const lvl1 = E.spellList(c.classId, 1).filter(sp => !sc.always.includes(sp.id));
+      const lvl1 = E.spellList(c.classId, 1, c.choices.subclass).filter(sp => !sc.always.includes(sp.id));
       if (sc.type === 'known') out.push(spellGroup('Magias de 1º nível conhecidas', 'spells', lvl1, c.choices.spells, sc.known, 'Estas são as magias que você sabe. Cada uso gasta um espaço de magia.'));
       if (sc.type === 'prepared') {
         out.push(spellGroup('Magias preparadas hoje', 'prepared', lvl1, c.choices.prepared, sc.prepared,
@@ -637,7 +688,8 @@
       <header class="sh-head">
         <div class="sh-name"><h3>${esc(c.name || 'Sem nome')}</h3><small>Nome do personagem</small></div>
         <dl class="sh-meta">
-          <div><dt>Classe e nível</dt><dd>${cls ? cls.name + ' 1' : '—'}${cls && cls.subclass ? ' (' + cls.subclass.name + ')' : ''}</dd></div>
+          <div><dt>Classe e nível</dt><dd>${cls ? cls.name + ' 1' : '—'}${d.path && d.path.option && d.path.pickLevel === 1 ? ' (' + esc(d.path.option.name) + ')' : ''}</dd></div>
+          ${d.path && d.path.option && d.path.pickLevel > 1 ? `<div><dt>Caminho planejado (nv ${d.path.pickLevel})</dt><dd>${esc(d.path.option.name)}</dd></div>` : ''}
           <div><dt>Espécie</dt><dd>${race ? race.name : '—'}</dd></div>
           <div><dt>Antecedente</dt><dd>${bg ? (bg.custom && c.choices.bgIdea ? c.choices.bgIdea : bg.name) : '—'}</dd></div>
           <div><dt>Jogador</dt><dd>${esc(c.player || '—')}</dd></div>
@@ -674,6 +726,8 @@
             ${st.age || st.appearance ? `<p><b>Aparência:</b> ${esc([st.age && st.age + ' anos', st.appearance].filter(Boolean).join(', '))}</p>` : ''}</section>
         </div>
       </div>
+      ${cls && P.classes[c.classId] ? `<section class="sh-box sh-track"><h4>Trilha até o nível ${P.levelCap}${d.path && d.path.option ? ' — ' + esc(d.path.option.name) + ` (${P.sources[d.path.option.src].short} p. ${d.path.option.page})` : ''}</h4>
+        <ul>${P.track(c.classId, c.choices.subclass).filter(r => r.lv > 1).map(r => `<li class="${r.key ? 'key' : ''}"><b>Nv ${r.lv}</b> ${r.items.map(i => esc(i.t)).join(' · ')}</li>`).join('')}</ul></section>` : ''}
       ${st.backstory ? `<section class="sh-box sh-story"><h4>História</h4><p>${esc(st.backstory).replace(/\n/g, '<br>')}</p></section>` : ''}
       <footer class="sh-foot">Character Forge · ${R.edition}. Inclui material do SRD 5.1 da Wizards of the Coast LLC, licenciado sob CC BY 4.0.</footer>
     </article>`;
@@ -687,6 +741,7 @@
     el.innerHTML = `<details open class="pv"><summary>Prévia da ficha</summary>
       <h3>${esc(c.name || 'Sem nome')}</h3>
       <p class="muted">${[race && race.name, cls && cls.name + ' 1', R.backgrounds[c.backgroundId] && R.backgrounds[c.backgroundId].name].filter(Boolean).join(' · ') || 'Comece escolhendo um conceito'}</p>
+      ${d.path && d.path.option ? `<p class="small">🗺️ ${d.path.pickLevel > 1 ? 'Rumo a' : ''} <b>${esc(d.path.option.name)}</b>${d.path.pickLevel > 1 ? ` (nv ${d.path.pickLevel})` : ''}</p>` : ''}
       <div class="pv-stats">
         <div><b>${d.hp ?? '—'}</b><span>${T('pv', 'PV')}</span></div>
         <div><b>${d.ac}</b><span>${T('ca', 'CA')}</span></div>
@@ -754,6 +809,7 @@
           <h2>${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'} ${k.name}</h2><p>${k.tagline}</p>
           <p class="muted">${stars(k.difficulty)} ${diffLabel(k.difficulty)} · ${k.role}</p>
           <p class="example"><strong>Exemplo de turno:</strong> ${k.exampleTurn}</p>
+          <p class="small"><strong>Caminhos bons para começar:</strong> ${P.classes[id].options.filter(o => o.beginner).map(o => esc(o.name)).join(', ')} <a href="#/trilhas" data-action="trail-class" data-id="${id}">ver todos</a></p>
           <button class="btn primary" data-action="quiz-use" data-id="${id}">Criar um ${k.name}</button></article>`; }).join('')}</div>
         <button class="btn ghost" data-action="quiz-restart">Refazer o quiz</button></section>`;
       return;
@@ -786,6 +842,7 @@
       ${members.length ? `<div class="party-cov ${missing.length ? '' : 'ok'}">${missing.length ? `<strong>Dica para o grupo:</strong> ninguém cobre ${missing.map(r => C.roleNames[r]).join(', ')}. Não é obrigatório — mas é bom saber!` : '<strong>Grupo equilibrado:</strong> há linha de frente, cura, dano e alguém para conversar.'}</div>
       <div class="party-grid">${members.map((m, i) => { const d = E.derive(m); const cls = R.classes[m.classId], race = R.races[m.raceId]; return `<article class="char-card">
         <h2>${esc(m.name || 'Sem nome')}</h2><p class="muted">${[race && race.name, cls && cls.name].filter(Boolean).join(' · ')}${m.player ? ' — ' + esc(m.player) : ''}</p>
+        ${d.path && d.path.option ? `<p class="small">🗺️ ${d.path.pickLevel > 1 ? 'Planeja: ' : ''}<b>${esc(d.path.option.name)}</b>${d.path.pickLevel > 1 ? ` (nv ${d.path.pickLevel})` : ''}</p>` : ''}
         <p>${(C.roles[m.classId] || []).map(r => `<span class="tag">${C.roleNames[r]}</span>`).join(' ')}</p>
         <p class="small">PV <b>${d.hp ?? '—'}</b> · CA <b>${d.ac}</b> · Percepção passiva <b>${d.passivePerception}</b>${d.spellcasting ? ` · CD magia <b>${d.spellcasting.dc}</b>` : ''}</p>
         ${m.story.motivation ? `<p class="small"><b>Motivação:</b> ${esc(m.story.motivation)}</p>` : ''}
@@ -964,7 +1021,7 @@
 
   /* =================================================================== Eventos */
   function resetClassChoices(c) {
-    Object.assign(c.choices, { classSkills: [], tools: [], fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], sorcDragon: '', cantrips: [], spells: [], prepared: [] });
+    Object.assign(c.choices, { classSkills: [], tools: [], fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], sorcDragon: '', cantrips: [], spells: [], prepared: [], subclass: '' });
     c.equipment = { groups: {}, picks: {} };
   }
 
@@ -993,6 +1050,20 @@
       case 'next': c.step = Math.min(STEPS.length - 1, c.step + 1); touch(); rerender('#stepTitle'); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
       case 'prev': c.step = Math.max(0, c.step - 1); touch(); rerender('#stepTitle'); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
       case 'set-concept': c.concept = id; return done();
+      case 'set-subclass': {
+        const cls = R.classes[c.classId];
+        c.choices.subclass = c.choices.subclass === id ? '' : id;
+        if (cls.subclass && c.choices.subclass !== cls.subclass.id) {
+          // efeitos do caminho do SRD deixam de valer
+          if (c.classId === 'sorcerer') c.choices.sorcDragon = '';
+          const allowed = new Set(E.spellList(c.classId, 1, c.choices.subclass).map(s => s.id));
+          c.choices.spells = c.choices.spells.filter(x => allowed.has(x));
+        }
+        return done();
+      }
+      case 'trail-class': e.preventDefault(); trail = { cls: id, sub: '' }; if (route()[0] !== 'trilhas') go('trilhas'); else renderTrails(); return;
+      case 'trail-sub': trail.sub = trail.sub === id ? '' : id; renderTrails(); { const el2 = document.querySelector(`[data-action="trail-sub"][data-id="${id}"]`); if (el2) el2.focus({ preventScroll: true }); } return;
+      case 'trail-create': { const ch = newChar({ classId: trail.cls }); ch.choices.subclass = trail.sub; ch.concept = (C.concepts.find(k => k.classes[0] === trail.cls) || C.concepts.find(k => k.classes.includes(trail.cls)) || {}).id || ''; saveChars(); go('criar'); toast('Classe e caminho já selecionados. Dê um nome ao personagem!'); return; }
       case 'set-class':
         if (c.classId !== id) { c.classId = id; resetClassChoices(c); }
         done(); return showDetail();
