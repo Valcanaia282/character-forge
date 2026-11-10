@@ -56,6 +56,7 @@
     out.abilities = Object.assign({}, base.abilities, c.abilities || {});
     out.equipment = Object.assign({}, base.equipment, c.equipment || {});
     out.story = Object.assign({}, base.story, c.story || {});
+    out.sheet = Object.assign(E.defaultSheet(), c.sheet || {});
     return out;
   }
   Object.keys(chars).forEach(id => { chars[id] = migrate(chars[id]); });
@@ -108,7 +109,7 @@
     switch (r) {
       case 'criar': return renderCreator(true);
       case 'personagens': return renderList();
-      case 'ficha': return renderSheetPage(arg);
+      case 'ficha': return renderLive(arg);
       case 'quiz': return renderQuiz();
       case 'trilhas': return renderTrails();
       case 'grupo': return renderParty();
@@ -648,6 +649,7 @@
     ${errs.length ? `<div class="callout error no-print">Esta ficha ainda tem ${errs.length} pendência(s). <button class="btn sm" data-action="goto-step" data-id="8">Ver revisão</button></div>` : ''}
     <div class="sheet-actions no-print">
       <button class="btn primary" data-action="print">🖨️ Imprimir / Salvar PDF</button>
+      <a class="btn" href="#/ficha/${c.id}">📝 Abrir na aba Ficha (editar livremente)</a>
       <button class="btn" data-action="copy-code" data-id="${c.id}">📋 Copiar código para o mestre</button>
       <button class="btn" data-action="download-json" data-id="${c.id}">⬇️ Baixar arquivo</button>
       <button class="btn" data-action="party-add" data-id="${c.id}">🏰 Adicionar ao grupo</button>
@@ -661,6 +663,9 @@
   function sheetHTML(c) {
     const d = E.derive(c), cls = R.classes[c.classId], race = R.races[c.raceId], bg = R.backgrounds[c.backgroundId];
     const st = c.story;
+    const sh = d.sheet;
+    const coins = [['pc', 'PC'], ['pp', 'PP'], ['pe', 'PE'], ['po', 'PO'], ['pl', 'PL']].map(([k, l]) => `${l} ${Number(sh.coins[k]) || 0}`).join(' · ');
+    const extraSp = (sh.extraSpells || []).filter(s => (s.name || '').trim());
     const ab = R.abilities.map(a => {
       const sv = d.saves.find(s => s.id === a.id);
       return `<div class="ab"><span class="ab-n">${a.short}</span><span class="ab-m">${sign(d.mods[a.id])}</span><span class="ab-s">${d.rawScores[a.id] ?? '—'}</span>
@@ -670,10 +675,10 @@
     const sc = d.spellcasting;
     const spellName = id => (R.spells[id] || { name: id }).name;
     let spells = '';
-    if (sc || d.raceCantrips.length) {
+    if (sc || d.raceCantrips.length || extraSp.length) {
       const rows = [];
       if (sc) {
-        rows.push(`<p class="sp-stats">Atributo: <b>${E.abName(sc.ability)}</b> · CD <b>${sc.dc}</b> · Ataque <b>${sign(sc.attack)}</b> · Espaços de 1º nível: <b>${'☐ '.repeat(sc.slots[0])}</b>${sc.pact ? '(descanso curto)' : ''}</p>`);
+        rows.push(`<p class="sp-stats">Atributo: <b>${E.abName(sc.ability)}</b> · CD <b>${sc.dc}</b> · Ataque <b>${sign(sc.attack)}</b> · Espaços: <b>${sc.slotsByLevel.map(s => `${s.circle}º ${'☐'.repeat(s.n)}`).join(' · ') || '—'}</b>${sc.pact ? ' (pacto: voltam no descanso curto)' : ''}</p>`);
         rows.push(`<p><b>Truques:</b> ${c.choices.cantrips.map(spellName).join(', ') || '—'}</p>`);
         if (sc.type === 'known') rows.push(`<p><b>Magias conhecidas:</b> ${c.choices.spells.map(spellName).join(', ') || '—'}</p>`);
         if (sc.type === 'prepared') rows.push(`<p><b>Preparadas:</b> ${[...sc.always.map(id => spellName(id) + ' (sempre)'), ...c.choices.prepared.map(spellName)].join(', ') || '—'}</p>`);
@@ -681,30 +686,31 @@
       }
       d.raceCantrips.forEach(rc => rows.push(`<p><b>Truque da espécie:</b> ${spellName(rc.id)} (${E.abName(rc.ability)})</p>`));
       const ids = [...new Set([...(sc ? [...c.choices.cantrips, ...c.choices.spells, ...c.choices.prepared, ...sc.always] : []), ...d.raceCantrips.map(r => r.id)])].filter(id => R.spells[id]);
-      rows.push(`<ul class="sp-list">${ids.map(id => `<li><b>${R.spells[id].name}</b> — ${R.spells[id].desc}</li>`).join('')}</ul>`);
+      rows.push(`<ul class="sp-list">${ids.map(id => `<li><b>${R.spells[id].name}</b> — ${R.spells[id].desc}</li>`).join('')}${extraSp.map(s => `<li><b>${esc(s.name)}</b>${s.circle ? ` (${esc(s.circle)})` : ''}${s.notes ? ' — ' + esc(s.notes) : ''}</li>`).join('')}</ul>`);
       spells = `<section class="sh-box sh-spells"><h4>Magias</h4>${rows.join('')}</section>`;
     }
     return `<article class="sheet" id="sheet">
       <header class="sh-head">
         <div class="sh-name"><h3>${esc(c.name || 'Sem nome')}</h3><small>Nome do personagem</small></div>
         <dl class="sh-meta">
-          <div><dt>Classe e nível</dt><dd>${cls ? cls.name + ' 1' : '—'}${d.path && d.path.option && d.path.pickLevel === 1 ? ' (' + esc(d.path.option.name) + ')' : ''}</dd></div>
-          ${d.path && d.path.option && d.path.pickLevel > 1 ? `<div><dt>Caminho planejado (nv ${d.path.pickLevel})</dt><dd>${esc(d.path.option.name)}</dd></div>` : ''}
+          <div><dt>Classe e nível</dt><dd>${cls ? cls.name + ' ' + d.level : '—'}${d.path && d.path.option && d.path.pickLevel <= d.level ? ' (' + esc(d.path.option.name) + ')' : ''}</dd></div>
+          ${d.path && d.path.option && d.path.pickLevel > d.level ? `<div><dt>Caminho planejado (nv ${d.path.pickLevel})</dt><dd>${esc(d.path.option.name)}</dd></div>` : ''}
           <div><dt>Espécie</dt><dd>${race ? race.name : '—'}</dd></div>
           <div><dt>Antecedente</dt><dd>${bg ? (bg.custom && c.choices.bgIdea ? c.choices.bgIdea : bg.name) : '—'}</dd></div>
           <div><dt>Jogador</dt><dd>${esc(c.player || '—')}</dd></div>
           <div><dt>Tendência</dt><dd>${esc(st.alignment || '—')}</dd></div>
-          <div><dt>XP</dt><dd>0</dd></div>
+          <div><dt>XP</dt><dd>${Number(sh.xp) || 0}</dd></div>
         </dl>
       </header>
       <div class="sh-stats">
         <div><b>${d.ac}</b><span>CA</span></div>
         <div><b>${d.hp ?? '—'}</b><span>PV máx.</span></div>
+        <div><b>${sh.hpCurrent != null && sh.hpCurrent !== '' ? sh.hpCurrent : '&nbsp;'}</b><span>PV atuais</span></div>
         <div><b>${sign(d.initiative)}</b><span>Iniciativa</span></div>
         <div><b>${meters(d.speed)}</b><span>Deslocamento</span></div>
         <div><b>+${d.prof}</b><span>Proficiência</span></div>
         <div><b>${d.passivePerception}</b><span>Percepção passiva</span></div>
-        <div><b>1${d.hitDie}</b><span>Dado de Vida</span></div>
+        <div><b>${d.level}${d.hitDie}</b><span>Dados de Vida</span></div>
       </div>
       <div class="sh-cols">
         <div class="sh-col"><section class="sh-box"><h4>Atributos e resistências</h4><div class="abs">${ab}</div></section>
@@ -713,13 +719,13 @@
           <section class="sh-box"><h4>Ataques</h4>${d.attacks.length ? `<table class="sh-atk"><thead><tr><th>Arma</th><th>Acerto</th><th>Dano</th></tr></thead><tbody>${d.attacks.map(a => `<tr><td>${a.name}${a.notes.length ? `<small>${a.notes.join('; ')}</small>` : ''}</td><td>${sign(a.bonus)}</td><td>${a.damage}${a.versatile ? `<small>2 mãos: ${a.versatile}</small>` : ''}</td></tr>`).join('')}</tbody></table>` : '<p>—</p>'}</section>
           ${d.resources.length ? `<section class="sh-box"><h4>Recursos</h4><ul class="res">${d.resources.map(r => `<li>${r.name}: ${'☐ '.repeat(Math.max(0, Math.min(r.uses, 10)))}${r.uses > 10 ? r.uses : ''} <small>/ ${r.per}</small></li>`).join('')}</ul></section>` : ''}
           ${spells}
-          <section class="sh-box"><h4>Características e habilidades</h4><ul class="feats">${d.features.map(f => `<li><b>${esc(f.name)}</b> <small>(${esc(f.src)})</small>${f.desc ? ' — ' + esc(f.desc) : ''}</li>`).join('')}</ul></section>
+          <section class="sh-box"><h4>Características e habilidades</h4><ul class="feats">${d.features.map(f => `<li><b>${esc(f.name)}</b> <small>(${esc(f.src)})</small>${f.desc ? ' — ' + esc(f.desc) : ''}</li>`).join('')}</ul>${(sh.features || '').trim() ? `<p class="sh-free">${esc(sh.features).replace(/\n/g, '<br>')}</p>` : ''}</section>
         </div>
         <div class="sh-col">
           <section class="sh-box"><h4>Proficiências e idiomas</h4>
             <p><b>Armaduras:</b> ${d.armorProfText}</p><p><b>Armas:</b> ${d.weaponProfText || '—'}</p>
-            <p><b>Ferramentas:</b> ${d.profs.tools.join(', ') || '—'}</p><p><b>Idiomas:</b> ${d.profs.languages.join(', ')}</p></section>
-          <section class="sh-box"><h4>Equipamento</h4><ul class="eq">${d.itemList.map(i => `<li>${i.n > 1 ? i.n + '× ' : ''}${esc(i.name)}${i.desc && R.gear[i.id] && /Pacote|Kit/.test(i.name) ? `<small>${esc(i.desc)}</small>` : ''}</li>`).join('')}</ul></section>
+            <p><b>Ferramentas:</b> ${d.profs.tools.join(', ') || '—'}</p><p><b>Idiomas:</b> ${d.profs.languages.join(', ')}</p>${(sh.profsExtra || '').trim() ? `<p><b>Outras:</b> ${esc(sh.profsExtra)}</p>` : ''}</section>
+          <section class="sh-box"><h4>Equipamento</h4><p class="coins-line">${coins}</p><ul class="eq">${d.itemList.map(i => `<li>${i.n > 1 ? i.n + '× ' : ''}${esc(i.name)}${i.desc && R.gear[i.id] && /Pacote|Kit/.test(i.name) ? `<small>${esc(i.desc)}</small>` : ''}</li>`).join('')}</ul></section>
           <section class="sh-box"><h4>Personalidade</h4>
             <p><b>Traço:</b> ${esc(st.traits || '—')}</p><p><b>Ideal:</b> ${esc(st.ideals || '—')}</p>
             <p><b>Vínculo:</b> ${esc(st.bonds || '—')}</p><p><b>Defeito:</b> ${esc(st.flaws || '—')}</p>
@@ -729,6 +735,7 @@
       ${cls && P.classes[c.classId] ? `<section class="sh-box sh-track"><h4>Trilha até o nível ${P.levelCap}${d.path && d.path.option ? ' — ' + esc(d.path.option.name) + ` (${P.sources[d.path.option.src].short} p. ${d.path.option.page})` : ''}</h4>
         <ul>${P.track(c.classId, c.choices.subclass).filter(r => r.lv > 1).map(r => `<li class="${r.key ? 'key' : ''}"><b>Nv ${r.lv}</b> ${r.items.map(i => esc(i.t)).join(' · ')}</li>`).join('')}</ul></section>` : ''}
       ${st.backstory ? `<section class="sh-box sh-story"><h4>História</h4><p>${esc(st.backstory).replace(/\n/g, '<br>')}</p></section>` : ''}
+      ${(sh.notes || '').trim() ? `<section class="sh-box sh-story"><h4>Anotações</h4><p>${esc(sh.notes).replace(/\n/g, '<br>')}</p></section>` : ''}
       <footer class="sh-foot">Character Forge · ${R.edition}. Inclui material do SRD 5.1 da Wizards of the Coast LLC, licenciado sob CC BY 4.0.</footer>
     </article>`;
   }
@@ -754,6 +761,23 @@
       ${d.spellcasting ? `<p class="small"><b>Magia:</b> CD ${d.spellcasting.dc}, ataque ${sign(d.spellcasting.attack)}, ${d.spellcasting.slots[0]} espaço(s)</p>` : ''}
       <p class="tiny muted">Bônus de ${T('proficiencia', 'proficiência')}: +${d.prof}</p>
     </details>`;
+  }
+
+  /* ============================================================ Aba Ficha */
+  CF.ui = {
+    esc, sign, T, $app, toast, sheetHTML, afterRender: null,
+    chars: () => chars, currentId: () => currentId,
+    setCurrent(id) { currentId = id; saveChars(); }
+  };
+  function renderLive(id) {
+    CF.sheetTab.render(CF.ui, id);
+    if (CF.ui.afterRender) { const f = CF.ui.afterRender; CF.ui.afterRender = null; f(); }
+  }
+  function rerenderLive(focusSel) {
+    const y = window.scrollY;
+    renderLive(currentId);
+    window.scrollTo(0, y);
+    if (focusSel && !document.activeElement.matches('input,textarea')) { const el = document.querySelector(focusSel); if (el) el.focus({ preventScroll: true }); }
   }
 
   /* ============================================================ Meus personagens */
@@ -1038,7 +1062,12 @@
     if (!el || el.disabled) return;
     const act = el.dataset.action, id = el.dataset.id;
     const c = cur();
-    const focusKey = `[data-action="${act}"]${id != null ? `[data-id="${CSS.escape(id)}"]` : ''}${el.dataset.list ? `[data-list="${el.dataset.list}"]` : ''}${el.dataset.gi != null ? `[data-gi="${el.dataset.gi}"][data-oi="${el.dataset.oi}"]` : ''}`;
+    const focusKey = `[data-action="${act}"]${id != null ? `[data-id="${CSS.escape(id)}"]` : ''}${el.dataset.list ? `[data-list="${el.dataset.list}"]` : ''}${el.dataset.gi != null ? `[data-gi="${el.dataset.gi}"][data-oi="${el.dataset.oi}"]` : ''}${el.dataset.n != null ? `[data-n="${el.dataset.n}"]` : ''}`;
+    if (route()[0] === 'ficha' && c) {
+      const r = CF.sheetTab.action(CF.ui, act, el, c);
+      if (r === true) { touch(); rerenderLive(focusKey); return; }
+      if (r === false) return;
+    }
     const done = () => { touch(); rerender(focusKey); };
     const showDetail = () => { const d = document.querySelector('.panel .detail'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
 
@@ -1174,11 +1203,28 @@
     }
     if (el.dataset.manual && c) { c.abilities.manual[el.dataset.manual] = Number(el.value); touch(); renderPreview(c); renderStepper(c); }
     if (el.dataset.party) { party[el.dataset.party] = el.value; saveParty(); }
+    if (el.dataset.st && c) { setPath(c, el.dataset.st, el.value); touch(); }
     if (el.id === 'glossSearch') { const q = el.value.toLowerCase().trim(); document.querySelectorAll('.gloss > div').forEach(d => { d.hidden = q && !d.dataset.g.includes(q); }); }
   });
   document.addEventListener('change', e => {
     const el = e.target;
     const c = cur();
+    if (route()[0] === 'ficha' && c) {
+      if (el.id === 'sheetSwitch' && el.value) { go('ficha/' + el.value); return; }
+      if (el.dataset.sv) {
+        let v = el.value === '' ? null : Number(el.value);
+        if (el.dataset.sv === 'sheet.level') v = Math.min(CF.PATHS.levelCap, Math.max(1, v || 1));
+        if (v != null && v < 0 && el.dataset.sv !== 'sheet.hpCurrent') v = 0;
+        setPath(c, el.dataset.sv, v); touch(); rerenderLive(`[data-sv="${el.dataset.sv}"]`); return;
+      }
+      if (el.dataset.ov) {
+        const k = el.dataset.ov, v = el.value;
+        if (v === '' || Number(v) === Number(el.dataset.auto)) delete c.sheet.ov[k]; else c.sheet.ov[k] = Number(v);
+        touch(); rerenderLive(`[data-ov="${k}"]`); return;
+      }
+      if (el.dataset.sel) { setPath(c, el.dataset.sel, el.value); touch(); rerenderLive(`[data-sel="${el.dataset.sel}"]`); return; }
+      if (el.dataset.rr) { rerenderLive(); return; }
+    }
     if (el.dataset.manual && c) { rerender(); return; }
     if (el.dataset.bind && el.dataset.rerender && c) { setPath(c, el.dataset.bind, el.value); touch(); rerender(`[data-bind="${el.dataset.bind}"]`); return; }
     if (el.dataset.arr && c) {

@@ -13,8 +13,32 @@ CF.engine = (function () {
 
   function uid() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
+  /** Estado da ficha em jogo: nível, ajustes manuais e itens livres. */
+  function defaultSheet() {
+    return {
+      level: 1, xp: 0, hpCurrent: null, hpTemp: 0, hdUsed: 0, death: { s: 0, f: 0 }, inspiration: false,
+      conditions: [], slotsUsed: {}, resUsed: {}, ov: {}, skillProf: {}, skillExp: {}, saveProf: {},
+      customAttacks: [], customItems: [], removedItems: [], extraSpells: [], customRes: [],
+      coins: { pc: 0, pp: 0, pe: 0, po: 0, pl: 0 }, coinsInit: false, features: '', profsExtra: '', notes: ''
+    };
+  }
+  const profByLevel = lv => 2 + Math.floor((Math.min(12, Math.max(1, lv)) - 1) / 4);
+
+  /* Espaços de magia por nível (SRD), níveis 1–12. */
+  const SLOTS_FULL = [null, [2], [3], [4, 2], [4, 3], [4, 3, 2], [4, 3, 3], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2], [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1]];
+  const SLOTS_HALF = [null, [], [2], [3], [3], [4, 2], [4, 2], [4, 3], [4, 3], [4, 3, 2], [4, 3, 2], [4, 3, 3], [4, 3, 3]];
+  const PACT = [null, [1, 1], [2, 1], [2, 2], [2, 2], [2, 3], [2, 3], [2, 4], [2, 4], [2, 5], [2, 5], [3, 5], [3, 5]]; // [quantidade, círculo]
+  function slotsFor(classId, level) {
+    const t = { bard: 'full', cleric: 'full', druid: 'full', sorcerer: 'full', wizard: 'full', paladin: 'half', ranger: 'half', warlock: 'pact' }[classId];
+    if (t === 'full') return SLOTS_FULL[level].map((n, i) => ({ circle: i + 1, n }));
+    if (t === 'half') return SLOTS_HALF[level].map((n, i) => ({ circle: i + 1, n }));
+    if (t === 'pact') { const [n, circle] = PACT[level]; return [{ circle, n, pact: true }]; }
+    return [];
+  }
+
   function newCharacter() {
     return {
+      sheet: defaultSheet(),
       id: uid(), version: 1, createdAt: Date.now(), updatedAt: Date.now(), step: 0,
       name: '', player: '', concept: '', classId: '', raceId: '', backgroundId: '',
       abilities: { method: 'standard', standard: { str: null, dex: null, con: null, int: null, wis: null, cha: null }, pointbuy: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, manual: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } },
@@ -156,7 +180,15 @@ CF.engine = (function () {
   /* ---------------------------------------------------------------- Ficha */
   function derive(c) {
     const cls = R.classes[c.classId], race = R.races[c.raceId], bg = R.backgrounds[c.backgroundId];
+    const sh = Object.assign(defaultSheet(), c.sheet || {});
+    const ov = sh.ov || {};
+    const num = v => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
+    const level = Math.min(12, Math.max(1, Number(sh.level) || 1));
+    const profComputed = profByLevel(level);
+    const PB = num(ov.prof) ?? profComputed;
     const scores = finalScores(c);
+    const computedScores = Object.assign({}, scores);
+    AB.forEach(k => { if (num(ov['ab.' + k]) != null) scores[k] = num(ov['ab.' + k]); });
     const ready = AB.every(k => scores[k] != null);
     const s = {}; AB.forEach(k => { s[k] = scores[k] == null ? 10 : scores[k]; });
     const m = {}; AB.forEach(k => { m[k] = mod(s[k]); });
@@ -166,8 +198,14 @@ CF.engine = (function () {
     const path = pathInfo(c);
 
     // PV
-    let hp = null;
-    if (cls) hp = Math.max(1, cls.hitDie + m.con + (race && race.hpPerLevel ? race.hpPerLevel : 0) + (sub && sub.hpPerLevel ? sub.hpPerLevel : 0));
+    let hp = null, hpSuggested = null;
+    if (cls) {
+      const perLevelBonus = (race && race.hpPerLevel ? race.hpPerLevel : 0) + (sub && sub.hpPerLevel ? sub.hpPerLevel : 0);
+      const first = Math.max(1, cls.hitDie + m.con + perLevelBonus);
+      const avg = Math.max(1, cls.hitDie / 2 + 1 + m.con + perLevelBonus); // média fixa por nível
+      hpSuggested = first + (level - 1) * avg;
+      hp = num(ov.hpMax) ?? hpSuggested;
+    }
 
     // CA: avalia todas as formas possíveis e usa a melhor
     const bodyArmors = items.filter(i => R.armor[i] && R.armor[i].cat !== 'shield');
@@ -197,12 +235,12 @@ CF.engine = (function () {
 
     // Perícias e resistências
     const skills = R.skills.map(sk => {
-      const prof = p.skills.has(sk.id);
-      const exp = p.expertise.has(sk.id);
+      const prof = sh.skillProf[sk.id] ?? p.skills.has(sk.id);
+      const exp = prof && (sh.skillExp[sk.id] ?? p.expertise.has(sk.id));
       return { id: sk.id, name: sk.name, ab: sk.ab, prof, exp, src: p.skills.get(sk.id) || '', bonus: m[sk.ab] + (prof ? PB * (exp ? 2 : 1) : 0) };
     });
     const saves = AB.map(k => {
-      const prof = !!(cls && cls.saves.includes(k));
+      const prof = sh.saveProf[k] ?? !!(cls && cls.saves.includes(k));
       return { id: k, prof, bonus: m[k] + (prof ? PB : 0) };
     });
     const perception = skills.find(x => x.id === 'perception').bonus;
@@ -240,13 +278,19 @@ CF.engine = (function () {
       attacks.push({ id: 'unarmed', name: 'Golpe desarmado', bonus: m[ab] + PB, ability: ab, damage: '1d4 ' + sign(m[ab]) + ' concussão', versatile: '', props: ['Artes Marciais'], notes: ['pode ser feito como ação bônus após atacar'], proficient: true });
     }
 
+    (sh.customAttacks || []).forEach((a, i) => {
+      if (!a || !(a.name || '').trim()) return;
+      attacks.push({ id: 'custom' + i, name: a.name, bonus: num(a.bonus) ?? 0, ability: '', damage: a.damage || '', versatile: '', props: [], notes: a.notes ? [a.notes] : [], proficient: true, custom: true });
+    });
+
     // Magia
     let spellcasting = null;
-    if (cls && cls.casting) {
-      const k = cls.casting;
+    if (cls && (cls.casting || (level >= 2 && (c.classId === 'paladin' || c.classId === 'ranger')))) {
+      const k = cls.casting || { ability: c.classId === 'paladin' ? 'cha' : 'wis', cantrips: 0, slots: [], type: 'prepared' };
       const am = m[k.ability];
       spellcasting = {
-        ability: k.ability, mod: am, dc: 8 + PB + am, attack: PB + am,
+        ability: k.ability, mod: am, dc: num(ov.spellDc) ?? 8 + PB + am, attack: num(ov.spellAtk) ?? PB + am,
+        dcComputed: 8 + PB + am, attackComputed: PB + am, slotsByLevel: slotsFor(c.classId, level),
         cantrips: k.cantrips, known: k.known || 0, spellbook: k.spellbook || 0,
         prepared: (k.type === 'prepared' || k.type === 'spellbook') ? Math.max(1, am + 1) : 0,
         slots: k.slots, type: k.type, pact: !!k.pact,
@@ -286,20 +330,34 @@ CF.engine = (function () {
 
     // Recursos com contagem
     const resources = [];
-    if (c.classId === 'barbarian') resources.push({ name: 'Fúria', uses: 2, per: 'descanso longo' });
-    if (c.classId === 'bard') resources.push({ name: 'Inspiração Bárdica (d6)', uses: Math.max(1, m.cha), per: 'descanso longo' });
-    if (c.classId === 'fighter') resources.push({ name: 'Retomar o Fôlego', uses: 1, per: 'descanso curto' });
-    if (c.classId === 'paladin') { resources.push({ name: 'Sentido Divino', uses: 1 + m.cha, per: 'descanso longo' }); resources.push({ name: 'Cura pelas Mãos (PV)', uses: 5, per: 'descanso longo' }); }
-    if (c.classId === 'wizard') resources.push({ name: 'Recuperação Arcana', uses: 1, per: 'dia' });
-    if (c.raceId === 'dragonborn') resources.push({ name: 'Arma de Sopro', uses: 1, per: 'descanso curto' });
-    if (c.raceId === 'halforc') resources.push({ name: 'Resistência Implacável', uses: 1, per: 'descanso longo' });
+    const L = level, res = (key, name, uses, per) => resources.push({ key, name, uses, per });
+    if (c.classId === 'barbarian') res('rage', 'Fúria', L >= 12 ? 5 : L >= 6 ? 4 : L >= 3 ? 3 : 2, 'descanso longo');
+    if (c.classId === 'bard') res('bardic', `Inspiração Bárdica (d${L >= 10 ? 10 : L >= 5 ? 8 : 6})`, Math.max(1, m.cha), L >= 5 ? 'descanso curto' : 'descanso longo');
+    if (c.classId === 'cleric' && L >= 2) res('channel', 'Canalizar Divindade', L >= 6 ? 2 : 1, 'descanso curto');
+    if (c.classId === 'druid' && L >= 2) res('wildshape', 'Forma Selvagem', 2, 'descanso curto');
+    if (c.classId === 'fighter') { res('secondwind', 'Retomar o Fôlego', 1, 'descanso curto'); if (L >= 2) res('surge', 'Surto de Ação', 1, 'descanso curto'); if (L >= 9) res('indomitable', 'Indomável', 1, 'descanso longo'); }
+    if (c.classId === 'monk' && L >= 2) res('ki', 'Pontos de Chi', L, 'descanso curto');
+    if (c.classId === 'paladin') { res('sense', 'Sentido Divino', 1 + m.cha, 'descanso longo'); res('lay', 'Cura pelas Mãos (PV)', 5 * L, 'descanso longo'); if (L >= 3) res('channel', 'Canalizar Divindade', 1, 'descanso curto'); }
+    if (c.classId === 'sorcerer' && L >= 2) res('sorcery', 'Pontos de Feitiçaria', L, 'descanso longo');
+    if (c.classId === 'wizard') res('arcrec', 'Recuperação Arcana', 1, 'dia');
+    if (c.raceId === 'dragonborn') res('breath', 'Arma de Sopro', 1, 'descanso curto');
+    if (c.raceId === 'halforc') res('relentless', 'Resistência Implacável', 1, 'descanso longo');
+    (sh.customRes || []).forEach((r, i) => { if (r && (r.name || '').trim()) res('custom' + i, r.name, Math.max(0, Number(r.max) || 0), r.per || 'descanso longo'); });
 
     return {
       ready, path, scores: s, rawScores: scores, mods: m, prof: PB, hp, hitDie: cls ? 'd' + cls.hitDie : '—',
-      ac: best.v, acLabel: best.label, acOptions, wornArmor, speed, speedNote,
-      initiative: m.dex, passivePerception: 10 + perception,
+      ac: num(ov.ac) ?? best.v, acLabel: num(ov.ac) != null ? 'Ajustada manualmente' : best.label, acOptions, wornArmor, speed: num(ov.speed) ?? speed, speedNote,
+      initiative: num(ov.init) ?? m.dex, passivePerception: num(ov.passive) ?? 10 + perception, passiveComputed: 10 + perception,
       skills, saves, attacks, spellcasting, raceCantrips, features, resources,
-      profs: p, items, itemList: groupedItems(items),
+      profs: p, items, itemList: (() => {
+        const left = items.slice();
+        (sh.removedItems || []).forEach(id => { const i = left.indexOf(id); if (i >= 0) left.splice(i, 1); });
+        const list = groupedItems(left);
+        (sh.customItems || []).forEach((it, i) => { if (it && (it.name || '').trim()) list.push({ id: 'custom' + i, n: Number(it.qty) || 1, name: it.name, desc: it.notes || '', custom: true }); });
+        return list;
+      })(),
+      level, profComputed, hpSuggested, computedScores, ov, sheet: sh,
+      acComputed: best.v, initComputed: m.dex, speedComputed: speed, hitDiceTotal: level,
       armorProfText: [...p.armor].map(a => ({ light: 'leves', medium: 'médias', heavy: 'pesadas', shield: 'escudos' }[a])).join(', ') || 'nenhuma',
       weaponProfText: [...p.weapons].map(w => w === 'simple' ? 'armas simples' : w === 'martial' ? 'armas marciais' : (R.weapons[w] || {}).name || w).join(', ')
     };
@@ -380,7 +438,8 @@ CF.engine = (function () {
 
     // Magias
     const d = derive(c);
-    if (d.spellcasting) {
+    // Contagem de magias da criação (1º nível); depois disso o jogador ajusta livremente na aba Ficha.
+    if (d.spellcasting && cls.casting && d.level === 1) {
       const sc = d.spellcasting;
       if (ch.cantrips.length !== sc.cantrips) err(5, 'Escolha ' + sc.cantrips + ' truques (escolhidos: ' + ch.cantrips.length + ').');
       if (sc.type === 'known' && ch.spells.length !== sc.known) err(5, 'Escolha ' + sc.known + ' magias de 1º nível (escolhidas: ' + ch.spells.length + ').');
@@ -411,5 +470,5 @@ CF.engine = (function () {
     return out;
   }
 
-  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, pathInfo, activeSub, proficiencies, weaponProficient, derive, spellList, validate };
+  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, pathInfo, activeSub, defaultSheet, profByLevel, slotsFor, proficiencies, weaponProficient, derive, spellList, validate };
 })();
