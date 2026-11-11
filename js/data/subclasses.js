@@ -24,7 +24,7 @@ CF.PATHS = {
     barbarian: {
       term: 'Caminho Primitivo', pickLevel: 3, featureLevels: [3, 6, 10],
       options: [
-        { id: 'berserker', name: 'Caminho do Furioso', src: 'ldj', page: 49, beginner: true, roles: ['dano', 'frente'],
+        { id: 'berserker', srd: true, name: 'Caminho do Furioso', src: 'ldj', page: 49, beginner: true, roles: ['dano', 'frente'],
           pitch: 'Fúria pura: troca cautela por ataques extras e golpes brutais.', rumo: 'Vira uma máquina de dano corpo a corpo, difícil de assustar ou enfeitiçar, mas que se cansa se exagerar.' },
         { id: 'totem', name: 'Caminho do Guerreiro Totêmico', src: 'ldj', page: 50, beginner: true, roles: ['frente', 'exploracao'],
           pitch: 'Um espírito animal (urso, águia, lobo…) guia sua fúria.', rumo: 'Escolhas por nível mudam o estilo: tanque quase indestrutível, batedor ágil ou parceiro que abre espaço para o grupo.' },
@@ -39,7 +39,7 @@ CF.PATHS = {
     bard: {
       term: 'Colégio de Bardo', pickLevel: 3, featureLevels: [3, 6],
       options: [
-        { id: 'lore', name: 'Colégio do Conhecimento', src: 'ldj', page: 54, beginner: true, roles: ['suporte', 'utilidade', 'pericias'],
+        { id: 'lore', srd: true, name: 'Colégio do Conhecimento', src: 'ldj', page: 54, beginner: true, roles: ['suporte', 'utilidade', 'pericias'],
           pitch: 'O sabe-tudo do grupo: mais perícias e magias de outras listas.', rumo: 'Atrapalha os inimigos com palavras afiadas e aprende magias que normalmente seriam de outras classes.' },
         { id: 'valor', name: 'Colégio da Bravura', src: 'ldj', page: 55, beginner: true, roles: ['suporte', 'frente'],
           pitch: 'Bardo que vai para a luta: armaduras médias, escudo e armas.', rumo: 'Mistura canção e espada, com ataque extra e inspiração que ajuda aliados a acertar e se defender.' },
@@ -55,7 +55,7 @@ CF.PATHS = {
       term: 'Domínio Divino', pickLevel: 1, featureLevels: [1, 2, 6, 8],
       options: [
         { id: 'life', name: 'Domínio da Vida', src: 'ldj', page: 70, srd: true, beginner: true, roles: ['cura', 'frente'], grants: { armor: ['heavy'] },
-          pitch: 'O curandeiro clássico, com armadura pesada.', rumo: 'Curas cada vez mais fortes e golpes abençoados. É o “salva-vidas” do grupo. (Calculado automaticamente.)' },
+          pitch: 'O curandeiro clássico, com armadura pesada.', rumo: 'Curas cada vez mais fortes e golpes abençoados. É o “salva-vidas” do grupo. ' },
         { id: 'knowledge', name: 'Domínio do Conhecimento', src: 'ldj', page: 66, roles: ['utilidade', 'pericias'],
           pitch: 'Sacerdote estudioso, com idiomas e perícias de conhecimento.', rumo: 'Descobre segredos, lê pensamentos e resolve mistérios. Mais útil fora do combate.' },
         { id: 'trickery', name: 'Domínio da Enganação', src: 'ldj', page: 67, roles: ['furtivo', 'suporte'],
@@ -77,7 +77,7 @@ CF.PATHS = {
     druid: {
       term: 'Círculo Druídico', pickLevel: 2, featureLevels: [2, 6, 10],
       options: [
-        { id: 'land', name: 'Círculo da Terra', src: 'ldj', page: 75, beginner: true, roles: ['controle', 'utilidade'],
+        { id: 'land', srd: true, name: 'Círculo da Terra', src: 'ldj', page: 75, beginner: true, roles: ['controle', 'utilidade'],
           pitch: 'Conjurador focado em magias, ligado a um tipo de terreno.', rumo: 'Mais magias preparadas e recuperação de espaços de magia. Para quem gosta de lançar feitiços.' },
         { id: 'moon', name: 'Círculo da Lua', src: 'ldj', page: 76, beginner: true, roles: ['frente', 'controle'],
           pitch: 'Vira feras grandes e perigosas para lutar.', rumo: 'Transforma-se em animais cada vez mais fortes e, mais tarde, em elementais.' },
@@ -90,7 +90,7 @@ CF.PATHS = {
     fighter: {
       term: 'Arquétipo Marcial', pickLevel: 3, featureLevels: [3, 7, 10],
       options: [
-        { id: 'champion', name: 'Campeão', src: 'ldj', page: 85, beginner: true, roles: ['dano', 'frente'],
+        { id: 'champion', srd: true, name: 'Campeão', src: 'ldj', page: 85, beginner: true, roles: ['dano', 'frente'],
           pitch: 'Simples e eficiente: acerta críticos com mais facilidade.', rumo: 'Cada vez mais atlético e resistente. A opção ideal para quem quer poucas regras.' },
         { id: 'battlemaster', name: 'Mestre de Batalha', src: 'ldj', page: 87, beginner: true, roles: ['dano', 'controle'],
           pitch: 'Tático com manobras: derrubar, desarmar, comandar aliados.', rumo: 'Mais manobras e dados de superioridade maiores; muitas decisões interessantes a cada turno.' },
@@ -107,7 +107,7 @@ CF.PATHS = {
     monk: {
       term: 'Tradição Monástica', pickLevel: 3, featureLevels: [3, 6, 11],
       options: [
-        { id: 'openhand', name: 'Caminho da Mão Aberta', src: 'ldj', page: 105, beginner: true, roles: ['dano', 'controle'],
+        { id: 'openhand', srd: true, name: 'Caminho da Mão Aberta', src: 'ldj', page: 105, beginner: true, roles: ['dano', 'controle'],
           pitch: 'Mestre das artes marciais clássicas.', rumo: 'Golpes que derrubam e empurram, além de autocura. O monge mais direto.' },
         { id: 'shadow', name: 'Caminho da Sombra', src: 'ldj', page: 106, roles: ['furtivo', 'mobilidade'],
           pitch: 'Ninja: usa chi para criar escuridão e silêncio.', rumo: 'Teletransporta-se entre sombras e ataca de surpresa.' },
@@ -124,7 +124,7 @@ CF.PATHS = {
     paladin: {
       term: 'Juramento Sagrado', pickLevel: 3, featureLevels: [3, 7],
       options: [
-        { id: 'devotion', name: 'Juramento de Devoção', src: 'ldj', page: 112, beginner: true, roles: ['frente', 'suporte'],
+        { id: 'devotion', srd: true, name: 'Juramento de Devoção', src: 'ldj', page: 112, beginner: true, roles: ['frente', 'suporte'],
           pitch: 'O cavaleiro honrado clássico.', rumo: 'Arma abençoada, imunidade a enfeitiçamento para o grupo e luz contra o mal.' },
         { id: 'ancients', name: 'Juramento dos Anciões', src: 'ldj', page: 112, roles: ['frente', 'suporte'],
           pitch: 'Defensor da luz e da natureza.', rumo: 'Uma aura que protege aliados contra magias. Excelente contra conjuradores.' },
@@ -140,7 +140,7 @@ CF.PATHS = {
       term: 'Conclave de Patrulheiro', pickLevel: 3, featureLevels: [3, 7, 11],
       note: 'No PDF do Livro do Jogador que vocês usam, o Patrulheiro aparece na versão revisada (com “conclaves”). O Character Forge calcula o 1º nível pelo patrulheiro oficial do SRD — confirme com o mestre qual versão a mesa usa.',
       options: [
-        { id: 'hunter', name: 'Conclave do Caçador', src: 'ldj', page: 120, beginner: true, roles: ['dano'],
+        { id: 'hunter', srd: true, name: 'Conclave do Caçador', src: 'ldj', page: 120, beginner: true, roles: ['dano'],
           pitch: 'Especialista em derrubar monstros grandes ou grupos.', rumo: 'Você escolhe técnicas de ataque e defesa por nível. Versátil e direto.' },
         { id: 'beast', name: 'Conclave da Besta', src: 'ldj', page: 119, roles: ['dano', 'exploracao'],
           pitch: 'Luta ao lado de um companheiro animal.', rumo: 'Você e o animal ficam mais coordenados e fortes juntos.' },
@@ -157,7 +157,7 @@ CF.PATHS = {
     rogue: {
       term: 'Arquétipo de Ladino', pickLevel: 3, featureLevels: [3, 9],
       options: [
-        { id: 'thief', name: 'Ladrão', src: 'ldj', page: 92, beginner: true, roles: ['pericias', 'mobilidade'],
+        { id: 'thief', srd: true, name: 'Ladrão', src: 'ldj', page: 92, beginner: true, roles: ['pericias', 'mobilidade'],
           pitch: 'Mãos rápidas: usa itens e escala como ninguém.', rumo: 'Usa objetos como ação bônus e se move com agilidade incrível.' },
         { id: 'assassin', name: 'Assassino', src: 'ldj', page: 92, roles: ['dano', 'furtivo'],
           pitch: 'Disfarce e golpes devastadores na primeira rodada.', rumo: 'Brilha em emboscadas e infiltração com identidades falsas.' },
@@ -177,7 +177,7 @@ CF.PATHS = {
       term: 'Origem de Feitiçaria', pickLevel: 1, featureLevels: [1, 6],
       options: [
         { id: 'draconic', name: 'Linhagem Dracônica', src: 'ldj', page: 80, srd: true, beginner: true, roles: ['dano'],
-          pitch: 'Sangue de dragão: mais PV e pele resistente.', rumo: 'Reforça as magias do elemento do seu dragão e, mais tarde, ganha asas. (Calculado automaticamente.)' },
+          pitch: 'Sangue de dragão: mais PV e pele resistente.', rumo: 'Reforça as magias do elemento do seu dragão e, mais tarde, ganha asas. ' },
         { id: 'wildmagic', name: 'Magia Selvagem', src: 'ldj', page: 81, roles: ['dano', 'utilidade'],
           pitch: 'Magia caótica e imprevisível.', rumo: 'Surtos aleatórios (às vezes bons, às vezes engraçados) e controle sobre a sorte. Divertido para mesas descontraídas.' },
         { id: 'divinesoul', name: 'Alma Favorecida', src: 'xge', page: 34, beginner: true, roles: ['cura', 'dano'],
@@ -192,7 +192,7 @@ CF.PATHS = {
       term: 'Patrono', pickLevel: 1, featureLevels: [1, 6, 10],
       options: [
         { id: 'fiend', name: 'O Corruptor', src: 'ldj', page: 60, srd: true, beginner: true, roles: ['dano'],
-          pitch: 'Pacto com um ser infernal.', rumo: 'Ganha vida temporária ao derrubar inimigos e magias de fogo. (Calculado automaticamente.)' },
+          pitch: 'Pacto com um ser infernal.', rumo: 'Ganha vida temporária ao derrubar inimigos e magias de fogo. ' },
         { id: 'archfey', name: 'A Arquifada', src: 'ldj', page: 59, roles: ['controle', 'social'],
           pitch: 'Pacto com um senhor das fadas.', rumo: 'Encanta e amedronta inimigos e some em névoa quando ameaçado.' },
         { id: 'greatold', name: 'O Grande Antigo', src: 'ldj', page: 60, roles: ['controle', 'social'],
@@ -214,7 +214,7 @@ CF.PATHS = {
           pitch: 'Cria objetos e se teletransporta.', rumo: 'Mobilidade com teleporte e criaturas invocadas mais duráveis.' },
         { id: 'enchantment', name: 'Escola de Encantamento', src: 'ldj', page: 99, roles: ['controle', 'social'],
           pitch: 'Controla mentes e emoções.', rumo: 'Hipnotiza inimigos e redireciona ataques.' },
-        { id: 'evocation', name: 'Escola de Evocação', src: 'ldj', page: 99, beginner: true, roles: ['dano'],
+        { id: 'evocation', srd: true, name: 'Escola de Evocação', src: 'ldj', page: 99, beginner: true, roles: ['dano'],
           pitch: 'Bolas de fogo sem queimar os amigos.', rumo: 'Protege aliados das suas explosões e aumenta o dano dos truques.' },
         { id: 'illusion', name: 'Escola de Ilusão', src: 'ldj', page: 100, roles: ['controle', 'utilidade'],
           pitch: 'Mestre de enganos visuais e sonoros.', rumo: 'Ilusões que mudam no meio da cena e, depois, ganham partes reais.' },
