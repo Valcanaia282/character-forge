@@ -37,6 +37,27 @@ CF.engine = (function () {
     return [];
   }
 
+  /**
+   * Quais listas de magias o personagem usa e até que círculo pode aprender no nível atual.
+   * lists: classes cujas listas valem; max: maior círculo liberado (0 = nenhum); cantrips: aprende truques;
+   * secrets: Bardo com Segredos Mágicos (pode pegar magias de qualquer classe).
+   */
+  function spellAccess(c, levelArg) {
+    const level = Math.min(20, Math.max(1, Number(levelArg || (c.sheet && c.sheet.level) || 1)));
+    const sub = c.choices.subclass;
+    const out = { lists: [], max: 0, cantrips: false, secrets: false, source: '' };
+    const full = ['bard', 'cleric', 'druid', 'sorcerer', 'wizard'];
+    if (full.includes(c.classId)) { out.lists = [c.classId]; out.max = Math.min(9, Math.ceil(level / 2)); out.cantrips = true; }
+    else if (c.classId === 'warlock') { out.lists = ['warlock']; out.max = level >= 11 ? 6 : PACT[Math.min(12, level)][1]; out.cantrips = true; }
+    else if (c.classId === 'paladin' || c.classId === 'ranger') { out.lists = [c.classId]; out.max = level < 2 ? 0 : level < 5 ? 1 : level < 9 ? 2 : level < 13 ? 3 : level < 17 ? 4 : 5; }
+    else if ((c.classId === 'fighter' && sub === 'eldritch') || (c.classId === 'rogue' && sub === 'arcanetrickster')) {
+      if (level >= 3) { out.lists = ['wizard']; out.max = level < 7 ? 1 : level < 13 ? 2 : level < 19 ? 3 : 4; out.cantrips = true; out.source = 'caminho'; }
+    }
+    if (c.classId === 'sorcerer' && sub === 'divinesoul') out.lists.push('cleric');
+    out.secrets = c.classId === 'bard' && (level >= 10 || (sub === 'lore' && level >= 6));
+    return out;
+  }
+
   function newCharacter() {
     return {
       sheet: defaultSheet(),
@@ -475,5 +496,5 @@ CF.engine = (function () {
     return out;
   }
 
-  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, pathInfo, activeSub, defaultSheet, profByLevel, slotsFor, proficiencies, weaponProficient, derive, spellList, validate };
+  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, pathInfo, activeSub, defaultSheet, profByLevel, slotsFor, spellAccess, proficiencies, weaponProficient, derive, spellList, validate };
 })();

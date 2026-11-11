@@ -25,6 +25,65 @@
   const PERS = ['descanso curto', 'descanso longo', 'dia'];
   const srdByName = name => { const n = (name || '').trim().toLowerCase(); const hit = Object.entries(R.spells).find(([, v]) => v.name.toLowerCase() === n); return hit ? { id: hit[0], ...hit[1] } : null; };
   const circleName = n => (Number(n) === 0 ? 'Truques' : `${n}º círculo`);
+  const fold = t => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const IDX = () => CF.SPELL_INDEX || [];
+  const idxByName = name => IDX().find(e => e.n.toLowerCase() === (name || '').trim().toLowerCase());
+  const SCHOOL_TAG = { abjuração: 'suporte', adivinhação: 'utilidade', conjuração: 'utilidade', encantamento: 'controle', evocação: 'dano', ilusão: 'controle', necromancia: 'dano', transmutação: 'utilidade' };
+
+  /* Filtro do seletor de magias (mantido entre redesenhos da ficha). */
+  let spFilter = { charId: null, circle: null, q: '', all: false };
+  function filterFor(c, acc) {
+    if (spFilter.charId !== c.id) spFilter = { charId: c.id, circle: null, q: '', all: false };
+    const ok = v => v === 'all' || (Number(v) === 0 ? acc.cantrips : Number(v) >= 1 && Number(v) <= acc.max);
+    if (spFilter.circle == null || !ok(spFilter.circle)) spFilter.circle = acc.max > 0 ? String(acc.max) : acc.cantrips ? '0' : 'all';
+    if (!acc.secrets) spFilter.all = false;
+    return spFilter;
+  }
+  /** Primeiro nível em que a classe libera um círculo. */
+  function unlockLevel(c, circle) {
+    for (let lv = 1; lv <= 20; lv++) if (E.spellAccess(c, lv).max >= circle) return lv;
+    return null;
+  }
+  function spellPool(c, acc, f) {
+    const have = new Set(c.sheet.spells.map(x => x.name.toLowerCase()));
+    const lists = f.all && acc.secrets ? null : acc.lists;
+    const q = fold(f.q);
+    return IDX().filter(e =>
+      (!lists || e.c.some(k => lists.includes(k))) &&
+      (e.l === 0 ? acc.cantrips : e.l <= acc.max) &&
+      (f.circle === 'all' || e.l === Number(f.circle)) &&
+      (!q || fold(e.n).includes(q))
+    ).map(e => Object.assign({ have: have.has(e.n.toLowerCase()) }, e));
+  }
+  function pickListHTML(ui, c, acc, f) {
+    const { esc } = ui;
+    const pool = spellPool(c, acc, f);
+    if (!pool.length) return '<p class="muted small">Nenhuma magia encontrada com esses filtros.</p>';
+    return `<p class="tiny muted">${pool.length} magia${pool.length > 1 ? 's' : ''}${f.all ? ' de todas as classes' : ''}</p>
+      <ul class="sp-pick-list">${pool.map(e => {
+        const srd = e.id ? R.spells[e.id] : null;
+        const others = f.all ? e.c.filter(k => !acc.lists.includes(k)) : [];
+        return `<li class="${e.have ? 'have' : ''}">
+          <div class="sp-pick-info"><b>${esc(e.n)}</b>
+            <small>${e.l === 0 ? 'truque' : e.l + 'º círculo'} · ${e.s}${e.r ? ' · ritual' : ''}${e.p ? ' · LdJ p. ' + e.p : ''}${others.length ? ' · lista: ' + others.map(k => R.classes[k].name).join(', ') : ''}</small>
+            ${srd ? `<span class="sp-mini">${esc(srd.desc)}</span>` : ''}</div>
+          ${e.have ? '<span class="have-tag">✓ no quadro</span>' : `<button class="btn sm" data-action="sp-add-idx" data-id="${esc(e.n)}">+ Adicionar</button>`}
+        </li>`;
+      }).join('')}</ul>`;
+  }
+  // Filtros atualizam só a lista (sem redesenhar a ficha inteira)
+  function refreshPick() {
+    const ui = CF.ui; if (!ui) return;
+    const c = ui.chars()[ui.currentId()]; const box = document.getElementById('spPick');
+    if (!c || !box) return;
+    const acc = E.spellAccess(c, E.derive(c).level);
+    box.innerHTML = pickListHTML(ui, c, acc, filterFor(c, acc));
+  }
+  document.addEventListener('input', e => { if (e.target.id === 'spSearch') { spFilter.q = e.target.value; refreshPick(); } });
+  document.addEventListener('change', e => {
+    if (e.target.id === 'spCircle') { spFilter.circle = e.target.value; refreshPick(); }
+    if (e.target.id === 'spAll') { spFilter.all = e.target.checked; refreshPick(); }
+  });
 
   /** Monta (ou completa) o quadro de magias a partir das escolhas feitas no assistente. */
   function seedSpells(c, d, existing) {
@@ -81,34 +140,56 @@
       ${circles.length ? circles.map(n => `<div class="sp-group"><h4>${circleName(n)} <span class="count">${sh.spells.filter(x => (Number(x.circle) || 0) === n).length}</span></h4><div class="sp-cards">
         ${sh.spells.map((x, i) => ({ x, i })).filter(o => (Number(o.x.circle) || 0) === n).map(({ x, i }) => {
           const srd = x.sid ? R.spells[x.sid] : srdByName(x.name);
+          const ix = srd ? null : idxByName(x.name);
           const canPrep = preparer && n > 0;
           return `<div class="sp-card ${canPrep && x.prep ? 'prep' : ''} ${canPrep && !x.prep ? 'unprep' : ''}">
             <div class="sp-head">
               <input type="text" class="sp-name" data-st="sheet.spells.${i}.name" value="${esc(x.name)}" aria-label="Nome da magia">
               <button class="mini danger" data-action="sp-del" data-id="${i}" aria-label="Remover ${esc(x.name)}">✕</button>
             </div>
-            <div class="sp-tags">${srd ? `<span class="tag tag-${srd.tag}">${srd.tag}</span>${srd.ritual ? '<span class="tag">ritual</span>' : ''}` : '<span class="tag">anotada</span>'}
+            <div class="sp-tags">${srd ? `<span class="tag tag-${srd.tag}">${srd.tag}</span>${srd.ritual ? '<span class="tag">ritual</span>' : ''}` : ix ? `<span class="tag tag-${SCHOOL_TAG[ix.s] || 'utilidade'}">${ix.s}</span>${ix.r ? '<span class="tag">ritual</span>' : ''}` : '<span class="tag">anotada</span>'}
               ${canPrep ? `<button class="prep-btn ${x.prep ? 'on' : ''}" data-action="sp-prep" data-id="${i}" aria-pressed="${!!x.prep}">${x.prep ? '✓ Preparada' : 'Preparar'}</button>` : ''}</div>
-            ${srd ? `<p class="sp-desc">${esc(srd.desc)}</p>` : ''}
+            ${srd ? `<p class="sp-desc">${esc(srd.desc)}</p>` : ix && ix.p ? `<p class="sp-desc muted">📖 Descrição no Livro do Jogador, p. ${ix.p}.</p>` : ''}
             <input type="text" class="sp-notes" data-st="sheet.spells.${i}.notes" value="${esc(x.notes)}" placeholder="${srd ? 'Anotações' : 'Resumo: tempo, alcance, efeito, dano…'}" aria-label="Anotações da magia">
           </div>`;
         }).join('')}
       </div></div>`).join('') : '<p class="callout small">Nenhuma magia no quadro ainda.</p>'}
 
-      <div class="sp-add">
-        <h4>Adicionar magia</h4>
-        <div class="row">
-          ${pool.length ? `<select id="spAddSel" aria-label="Magias da lista da classe"><option value="">Da lista da classe…</option>${[0, 1].map(l => `<optgroup label="${circleName(l)}">${pool.filter(x => x.lvl === l).map(x => `<option value="${x.id}">${esc(x.name)} — ${x.tag}</option>`).join('')}</optgroup>`).join('')}</select>
-          <button class="btn sm" data-action="sp-add-list">+ Adicionar</button>` : ''}
-        </div>
-        <div class="row">
-          <input type="text" id="spAddName" list="spellNames" placeholder="Outra magia (ex.: de 2º círculo, de talento…)" aria-label="Nome de outra magia">
-          <select id="spAddCircle" aria-label="Círculo">${Array.from({ length: 10 }, (_, n) => `<option value="${n}" ${n === 1 ? 'selected' : ''}>${n === 0 ? 'Truque' : n + 'º círculo'}</option>`).join('')}</select>
-          <button class="btn sm" data-action="sp-add-free">+ Adicionar</button>
-        </div>
-        <datalist id="spellNames">${Object.values(R.spells).map(x => `<option value="${esc(x.name)}">`).join('')}</datalist>
-        <button class="btn sm ghost" data-action="sp-reseed" title="Adiciona as magias escolhidas no assistente que ainda não estão no quadro">↻ Trazer escolhas do assistente</button>
-      </div>
+      ${(() => {
+        const acc = E.spellAccess(c, d.level);
+        const f = filterFor(c, acc);
+        const has = (acc.lists.length && (acc.max > 0 || acc.cantrips)) || acc.secrets;
+        const maxPossible = Math.max(...[1, 2, 3, 4, 5, 6, 7, 8, 9].filter(n => unlockLevel(c, n) != null), 0);
+        const circleOpts = has ? [
+          acc.cantrips ? `<option value="0" ${f.circle === '0' ? 'selected' : ''}>Truques</option>` : '',
+          ...Array.from({ length: maxPossible }, (_, i) => i + 1).map(n => {
+            if (n <= acc.max) return `<option value="${n}" ${f.circle === String(n) ? 'selected' : ''}>${n}º círculo</option>`;
+            const lv = unlockLevel(c, n);
+            return `<option value="${n}" disabled>${n}º círculo — ${lv && lv <= P.levelCap ? 'a partir do nível ' + lv : 'acima do nível ' + P.levelCap}</option>`;
+          }),
+          `<option value="all" ${f.circle === 'all' ? 'selected' : ''}>Todos os liberados</option>`
+        ].join('') : '';
+        const listNames = acc.lists.map(k => R.classes[k].name).join(' + ');
+        return `<div class="sp-add">
+          <h4>Adicionar magia</h4>
+          ${has ? `<p class="small sp-access">Lista do <b>${listNames}</b>${acc.source ? ' (pelo caminho)' : ''} · nível ${d.level} · pode aprender ${acc.cantrips ? 'truques e ' : ''}magias até o <b>${acc.max}º círculo</b>.</p>
+          <div class="sp-filter">
+            <label>Círculo <select id="spCircle">${circleOpts}</select></label>
+            <label class="grow">Buscar <input type="search" id="spSearch" value="${esc(f.q)}" placeholder="Nome da magia"></label>
+            ${acc.secrets ? `<label class="chk"><input type="checkbox" id="spAll" ${f.all ? 'checked' : ''}> Segredos Mágicos: incluir todas as classes</label>` : ''}
+          </div>
+          <div id="spPick">${pickListHTML(ui, c, acc, f)}</div>` : `<p class="muted small">${R.classes[c.classId] ? 'O ' + R.classes[c.classId].name : 'Sua classe'} não tem lista de magias${c.classId === 'paladin' || c.classId === 'ranger' ? ' no 1º nível (as magias chegam no nível 2)' : c.classId === 'fighter' || c.classId === 'rogue' ? ' (só com o caminho Cavaleiro Arcano ou Trapaceiro Arcano, a partir do nível 3)' : ''}.</p>`}
+          <details class="sp-free"><summary>Magia fora da lista (espécie, talento, item mágico) — confirme com o mestre</summary>
+            <div class="row">
+              <input type="text" id="spAddName" list="spellNames" placeholder="Nome da magia" aria-label="Nome da magia fora da lista">
+              <select id="spAddCircle" aria-label="Círculo">${Array.from({ length: 10 }, (_, n) => `<option value="${n}" ${n === 1 ? 'selected' : ''}>${n === 0 ? 'Truque' : n + 'º círculo'}</option>`).join('')}</select>
+              <button class="btn sm" data-action="sp-add-free">+ Adicionar</button>
+            </div>
+            <datalist id="spellNames">${IDX().map(x => `<option value="${esc(x.n)}">`).join('')}</datalist>
+          </details>
+          <button class="btn sm ghost" data-action="sp-reseed" title="Adiciona as magias escolhidas no assistente que ainda não estão no quadro">↻ Trazer escolhas do assistente</button>
+        </div>`;
+      })()}
     </section>`;
   }
 
@@ -399,17 +480,21 @@
         return true;
       case 'sp-prep': sh.spells[id].prep = !sh.spells[id].prep; return true;
       case 'sp-del': sh.spells.splice(Number(id), 1); return true;
-      case 'sp-add-list': {
-        const sid = document.getElementById('spAddSel').value;
-        if (!sid) { ui.toast('Escolha uma magia na lista.'); return false; }
-        sh.spells.push({ sid, name: R.spells[sid].name, circle: R.spells[sid].lvl, prep: !PREPARERS.includes(c.classId), notes: '' });
+      case 'sp-add-idx': {
+        const e = idxByName(id);
+        if (!e) return false;
+        const acc = E.spellAccess(c, d.level);
+        const allowed = (e.l === 0 ? acc.cantrips : e.l <= acc.max) && (acc.secrets || e.c.some(k => acc.lists.includes(k)));
+        if (!allowed) { ui.toast('Essa magia não está liberada para sua classe neste nível.'); return false; }
+        sh.spells.push({ sid: e.id || '', name: e.n, circle: e.l, prep: !PREPARERS.includes(c.classId), notes: '' });
+        ui.toast(`${e.n} adicionada ao quadro.`);
         return true;
       }
       case 'sp-add-free': {
         const name = document.getElementById('spAddName').value.trim();
         if (!name) { ui.toast('Digite o nome da magia.'); return false; }
-        const srd = srdByName(name);
-        sh.spells.push({ sid: srd ? srd.id : '', name: srd ? srd.name : name, circle: srd ? srd.lvl : Number(document.getElementById('spAddCircle').value), prep: !PREPARERS.includes(c.classId), notes: '' });
+        const srd = srdByName(name); const ix = idxByName(name);
+        sh.spells.push({ sid: srd ? srd.id : '', name: srd ? srd.name : ix ? ix.n : name, circle: srd ? srd.lvl : ix ? ix.l : Number(document.getElementById('spAddCircle').value), prep: !PREPARERS.includes(c.classId), notes: 'Fora da lista da classe' });
         if (!srd) ui.afterRender = () => { const t = document.querySelector(`[data-st="sheet.spells.${sh.spells.length - 1}.notes"]`); if (t) t.focus(); };
         return true;
       }

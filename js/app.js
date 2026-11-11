@@ -711,7 +711,8 @@
         ${sc ? `<p class="sp-stats">Atributo: <b>${E.abName(sc.ability)}</b> · CD <b>${sc.dc}</b> · Ataque <b>${sign(sc.attack)}</b> · Espaços: <b>${sc.slotsByLevel.map(x => `${x.circle}º ${'☐'.repeat(x.n)}`).join(' · ') || '—'}</b>${sc.pact ? ' (pacto: voltam no descanso curto)' : ''}</p>` : ''}
         <ul class="sp-list">${circles.map(n => `<li class="sp-circle">${n === 0 ? 'Truques' : n + 'º círculo'}</li>${list.filter(x => (Number(x.circle) || 0) === n).map(x => {
           const srd = x.sid ? R.spells[x.sid] : null;
-          return `<li><b>${prepr && n > 0 ? (x.prep ? '● ' : '○ ') : ''}${esc(x.name)}</b>${srd ? ' — ' + esc(srd.desc) : ''}${x.notes ? ' — ' + esc(x.notes) : ''}</li>`;
+          const ix = srd ? null : (CF.SPELL_INDEX || []).find(e => e.n.toLowerCase() === (x.name || '').toLowerCase());
+          return `<li><b>${prepr && n > 0 ? (x.prep ? '● ' : '○ ') : ''}${esc(x.name)}</b>${srd ? ' — ' + esc(srd.desc) : ix ? ` <small>(${ix.s}${ix.p ? ', LdJ p. ' + ix.p : ''})</small>` : ''}${x.notes ? ' — ' + esc(x.notes) : ''}</li>`;
         }).join('')}`).join('')}</ul>${prepr ? '<p class="tiny">● preparada · ○ não preparada</p>' : ''}</section>` : '';
     }
     return `<article class="sheet" id="sheet">
