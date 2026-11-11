@@ -12,7 +12,8 @@ Ele pergunta o que você quer jogar, explica cada escolha com linguagem simples 
 | **Aba Ficha (edição livre)** | A ficha de jogo depois da criação: subir de nível (até 12, com PV, proficiência, espaços de magia e recursos recalculados), PV atuais e temporários com botões de dano/cura, testes contra a morte, condições, espaços e recursos gastos, descansos curto/longo, ajuste manual de qualquer número (com botão para voltar ao automático), perícias, ataques, itens, moedas, magias e recursos personalizados, habilidades novas e anotações. Tudo vai para a ficha impressa/PDF. |
 | **Caminhos e trilhas (nível 1–12)** | Todas as subclasses do Livro do Jogador e do Guia de Xanathar, com página de referência, resumo do estilo e “para onde vai” até o nível 12. O jogador marca o caminho planejado (ou escolhe já no 1º nível, no caso de Clérigo, Feiticeiro e Bruxo), e a ficha mostra a trilha nível a nível. |
 | **Recomendações** | Antecedentes (os 13 do Livro do Jogador + personalizado), idiomas e ferramentas sugeridos conforme classe, caminho e espécie, com o motivo de cada sugestão. |
-| **Habilidades automáticas** | Todas as habilidades de classe do nível 1 ao 12 e os 12 caminhos do SRD calculados na ficha (Ataque Furtivo, Fúria, chi, Aura de Proteção, ataques extras, deslocamento etc.). Nos demais caminhos, a ficha indica nível e página do livro. |
+| **Habilidades automáticas** | Todas as habilidades de classe do nível 1 ao 12 calculadas na ficha (Ataque Furtivo, Fúria, chi, Aura de Proteção, ataques extras, deslocamento etc.), nos 12 caminhos do SRD e nos 36 caminhos do Livro do Jogador/Xanathar que também existem no Baldur's Gate 3. Nos demais caminhos, a ficha indica nível e página do livro. |
+| **Evolução no estilo BG3** | Quadro “Evolução: escolhas por nível” na ficha: aumento de atributo ou talento (os 42 talentos do Livro do Jogador, com os do BG3 em destaque), estilos de luta, especializações, manobras, metamagias, invocações, dádiva do pacto, disciplinas elementais, disparos arcanos, totens, companheiro animal, terreno do druida etc. A ficha aplica os efeitos (atributos, CA, iniciativa, PV, perícias, resistências, recursos, magias do caminho). |
 | **Descubra seu aventureiro** | Quiz de 5 perguntas que recomenda as 3 classes que mais combinam com você. |
 | **Ficha inteligente** | Cálculo automático de PV, CA (testa todas as opções e usa a melhor), iniciativa, resistências, perícias, ataques, CD e ataque mágico, recursos de classe. Validação de regras com atalhos para corrigir. |
 | **Gerador de histórias** | Perguntas de origem (motivação, medo, confiança, objetivo, segredo) com ideias clicáveis e um rascunho editável. |
@@ -32,7 +33,7 @@ O progresso fica salvo automaticamente no navegador de cada pessoa (não há log
 
 - Edição: **D&D 5ª edição (2014)**, usando apenas o conteúdo aberto do **SRD 5.1**, no **1º nível**: 12 classes (com a subclasse do SRD quando ela vem no 1º nível), 9 espécies, o antecedente Acólito + um antecedente personalizado, magias de truque e 1º nível, arranjo padrão / compra de pontos / valores rolados.
 - Os textos explicativos em português são originais.
-- **Caminhos (subclasses):** nomes e páginas do *Livro do Jogador* e do *Guia de Xanathar para Todas as Coisas*, com resumos próprios e curtos — as regras completas ficam no livro. Só os caminhos do SRD (Domínio da Vida, Linhagem Dracônica, O Corruptor) têm efeitos calculados automaticamente; nos outros caminhos de 1º nível, a ficha indica a página para anotar as habilidades com o mestre (proficiências de armadura e armas dos domínios já são aplicadas).
+- **Caminhos (subclasses):** nomes e páginas do *Livro do Jogador* e do *Guia de Xanathar para Todas as Coisas*, com resumos próprios e curtos das mecânicas — as regras completas ficam no livro. Têm trilha automática os caminhos do SRD e os que também existem no *Baldur's Gate 3* (as regras seguem os livros; o BG3 serve de modelo para quais caminhos automatizar e para o sistema de escolhas por nível). Nos demais caminhos, a ficha indica a página para anotar as habilidades com o mestre.
 - A campanha vai até o **nível 12**, então as trilhas param aí.
 
 > This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC, available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode. Character Forge não é afiliado à Wizards of the Coast.
@@ -46,6 +47,7 @@ js/data/rules-srd51.js   TODAS as regras (classes, espécies, armas, magias…) 
 js/data/content.js       conteúdo didático: conceitos, quiz, glossário, ideias de história
 js/data/backgrounds-ldj.js antecedentes do Livro do Jogador (proficiências e resumos próprios)
 js/data/features.js      habilidades de classe por nível e caminhos do SRD
+js/data/progression.js   evolução no estilo BG3: talentos, escolhas por nível e caminhos automáticos
 js/data/spell-desc.js    resumos próprios das magias do SRD até o 6º círculo
 js/data/spells-index.js  índice de magias por classe e círculo (nome, escola, página)
 js/recommend.js          recomendações de antecedente, idiomas e ferramentas
