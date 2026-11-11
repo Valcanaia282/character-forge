@@ -374,6 +374,12 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
 .sp-free .row { margin-top: 8px; }
 .ab-card.auto { background: var(--panel-2); }
 .ab-card.auto p { margin: 0; font-size: .9rem; color: var(--ink-2); }
+.ab-card.auto.new { border-color: var(--gold); box-shadow: inset 4px 0 0 var(--gold); }
+.ab-card.auto.book { border-style: dashed; }
+.rec { border: 1px solid rgba(212, 166, 74, .45); background: rgba(212, 166, 74, .08); border-radius: 10px; padding: 8px 12px; margin: 8px 0; font-size: .92rem; }
+.rec b { color: var(--gold-2); }
+.card .why { font-size: .8rem !important; color: var(--gold-2) !important; }
+.bg-section-title { margin: 14px 0 4px; }
 .ab-card.mine { border-color: rgba(212, 166, 74, .55); }
 .src-chip { font: 600 .7rem var(--sans); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
 .ab-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: .82rem; color: var(--muted); }
