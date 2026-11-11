@@ -257,8 +257,14 @@ CF.PATHS.track = function (classId, subId) {
   const cantrips = ['bard', 'cleric', 'druid', 'sorcerer', 'warlock', 'wizard'].includes(classId);
   for (let lv = 1; lv <= P.levelCap; lv++) {
     const items = [];
-    if (lv === pc.pickLevel) items.push({ k: 'pick', t: `Escolhe ${pc.term.toLowerCase()}` + (sub ? `: ${sub.name}` : '') });
+    const named = sub && CF.PROG ? CF.PROG.subFeatureNames(classId, sub.id, lv) : [];
+    if (lv === pc.pickLevel) items.push({ k: 'pick', t: `Escolhe ${pc.term.toLowerCase()}` + (sub ? `: ${sub.name}` : '') + (named.length ? ` — ${named.join(', ')}` : '') });
+    else if (named.length) items.push({ k: 'sub', t: `${sub.name}: ${named.join(', ')}` });
     else if (pc.featureLevels.includes(lv)) items.push({ k: 'sub', t: `Nova habilidade do ${pc.term.toLowerCase()}` + (sub ? ` (${sub.name})` : '') });
+    if (CF.PROG) {
+      const picks = (CF.PROG.CLASS_PICKS[classId] || []).filter(d => d.lvl === lv).concat(sub && CF.PROG.SUBS[classId + '.' + sub.id] && CF.PROG.SUBS[classId + '.' + sub.id].picks ? CF.PROG.SUBS[classId + '.' + sub.id].picks.filter(d => d.lvl === lv) : []);
+      picks.forEach(d => items.push({ k: 'choice', t: 'Escolha: ' + d.label + (d.n > 1 && !/\d/.test(d.label) ? ` (${d.n})` : '') }));
+    }
     (P.asi[classId] || P.asi.default).includes(lv) && items.push({ k: 'asi', t: 'Aumento de atributo (+2) ou talento' });
     if (lv === 5 && P.extraAttack.includes(classId) && !(P.milestones[classId][5] || []).some(x => x.startsWith('Ataque Extra'))) items.push({ k: 'atk', t: 'Ataque Extra' });
     const ct = P.casterType[classId];
