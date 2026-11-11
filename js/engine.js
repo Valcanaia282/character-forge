@@ -43,7 +43,7 @@ CF.engine = (function () {
       id: uid(), version: 1, createdAt: Date.now(), updatedAt: Date.now(), step: 0,
       name: '', player: '', concept: '', classId: '', raceId: '', backgroundId: '',
       abilities: { method: 'standard', standard: { str: null, dex: null, con: null, int: null, wis: null, cha: null }, pointbuy: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, manual: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } },
-      choices: { classSkills: [], raceSkills: [], bgSkills: [], raceLangs: [], bgLangs: [], bgToolLang: [], tools: [], raceTool: '', fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], dragon: '', sorcDragon: '', halfElfAsi: [], elfCantrip: '', cantrips: [], spells: [], prepared: [], bgIdea: '', subclass: '' },
+      choices: { classSkills: [], raceSkills: [], bgSkills: [], raceLangs: [], bgLangs: [], bgToolLang: [], tools: [], raceTool: '', fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], dragon: '', sorcDragon: '', halfElfAsi: [], elfCantrip: '', cantrips: [], spells: [], prepared: [], bgIdea: '', subclass: '', feat: '' },
       equipment: { groups: {}, picks: {} },
       story: { alignment: '', age: '', appearance: '', motivation: '', fear: '', trust: '', goal: '', secret: '', traits: '', ideals: '', bonds: '', flaws: '', backstory: '' }
     };
@@ -144,6 +144,7 @@ CF.engine = (function () {
   function proficiencies(c) {
     const cls = R.classes[c.classId], race = R.races[c.raceId], bg = R.backgrounds[c.backgroundId];
     const armor = new Set(cls ? cls.armor : []);
+    if (race && race.armor) race.armor.forEach(a => armor.add(a));
     const path = pathInfo(c);
     const grants = path && path.pickLevel === 1 && path.option && path.option.grants;
     if (grants && grants.armor) grants.armor.forEach(a => armor.add(a));
@@ -301,7 +302,7 @@ CF.engine = (function () {
     // Truques de espécie
     const raceCantrips = [];
     if (race && race.cantrip === 'wizard' && c.choices.elfCantrip) raceCantrips.push({ id: c.choices.elfCantrip, ability: 'int' });
-    if (race && race.knownCantrips) race.knownCantrips.forEach(id => raceCantrips.push({ id, ability: 'cha' }));
+    if (race && race.knownCantrips) race.knownCantrips.forEach(id => raceCantrips.push({ id, ability: race.cantripAbility || 'cha' }));
 
     // Características
     const features = [];
@@ -327,6 +328,7 @@ CF.engine = (function () {
       const d = R.dragons.find(x => x.id === c.choices.dragon);
       if (d) features.push({ name: 'Sopro de dragão ' + d.name, desc: d.area + ', 2d6 de ' + d.dmg + ', resistência de ' + abName(d.save) + ' CD ' + (8 + m.con + PB) + '. Resistência a ' + d.dmg + '.', src: race.name });
     }
+    if (race && race.feat) features.push({ name: 'Talento: ' + ((c.choices.feat || '').trim() || '(a escolher)'), desc: 'Anote o efeito do talento (Livro do Jogador, capítulo de talentos).', src: race.name });
     if (bg) features.push({ ...bg.feature, src: bg.name });
 
     // Recursos com contagem
@@ -343,6 +345,7 @@ CF.engine = (function () {
     if (c.classId === 'wizard') res('arcrec', 'Recuperação Arcana', 1, 'dia');
     if (c.raceId === 'dragonborn') res('breath', 'Arma de Sopro', 1, 'descanso curto');
     if (c.raceId === 'halforc') res('relentless', 'Resistência Implacável', 1, 'descanso longo');
+    if (race && race.raceSpells) race.raceSpells.filter(x => level >= x.level).forEach((x, i) => res('racespell' + i, x.name + ' (' + race.name + ')', 1, x.per));
     (sh.customRes || []).forEach((r, i) => { if (r && (r.name || '').trim()) res('custom' + i, r.name, Math.max(0, Number(r.max) || 0), r.per || 'descanso longo'); });
 
     return {
@@ -407,10 +410,11 @@ CF.engine = (function () {
     }
     if (race && race.asiChoice) {
       const hc = (ch.halfElfAsi || []).filter(Boolean);
-      if (hc.length !== race.asiChoice.count || new Set(hc).size !== hc.length) err(2, 'Escolha 2 atributos diferentes (exceto Carisma) para receber +1.');
+      if (hc.length !== race.asiChoice.count || new Set(hc).size !== hc.length) err(2, `Escolha ${race.asiChoice.count} atributos diferentes${race.asiChoice.exclude.length ? ' (exceto Carisma)' : ''} para receber +1.`);
     }
     if (race && race.toolChoice && !ch.raceTool) err(2, 'Escolha sua ferramenta de anão.');
     if (race && race.dragonAncestry && !ch.dragon) err(2, 'Escolha sua ancestralidade dracônica.');
+    if (race && race.feat && !(ch.feat || '').trim()) err(2, 'Escreva o talento escolhido (combine com o mestre).');
     if (race && race.cantrip === 'wizard' && !ch.elfCantrip) err(5, 'Escolha o truque de mago do Alto Elfo.');
 
     // Idiomas

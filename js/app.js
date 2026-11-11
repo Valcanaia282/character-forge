@@ -302,24 +302,29 @@
 
   function stepRace(c) {
     const race = R.races[c.raceId];
-    const asiTxt = r => Object.entries(r.asi).map(([k, v]) => `${R.abilities.find(a => a.id === k).short} +${v}`).join(', ') + (r.asiChoice ? ', +1 em dois à escolha' : '');
+    const asiTxt = r => [Object.entries(r.asi).map(([k, v]) => `${R.abilities.find(a => a.id === k).short} +${v}`).join(', '), r.asiChoice ? '+1 em dois à escolha' : ''].filter(Boolean).join(', ');
+    const srcTag = r => r.src === 'ldj' ? `<span class="src src-ldj" title="Livro do Jogador">LdJ p. ${r.page}</span>` : '<span class="src src-srd" title="Regras abertas (SRD)">SRD</span>';
     let extra = '';
     if (race) {
       const parts = [];
       if (race.asiChoice) {
-        parts.push(`<h4>Escolha 2 atributos para +1</h4><div class="chips">${R.abilities.filter(a => !race.asiChoice.exclude.includes(a.id)).map(a => {
+        parts.push(`<h4>Escolha ${race.asiChoice.count} atributos para +${race.asiChoice.amount}</h4><div class="chips">${R.abilities.filter(a => !race.asiChoice.exclude.includes(a.id)).map(a => {
           const on = c.choices.halfElfAsi.includes(a.id);
           const dis = !on && c.choices.halfElfAsi.length >= race.asiChoice.count;
-          return `<button class="chip ${on ? 'on' : ''}" data-action="toggle-list" data-list="halfElfAsi" data-id="${a.id}" data-max="2" aria-pressed="${on}" ${dis ? 'disabled' : ''}>${a.name}</button>`;
+          return `<button class="chip ${on ? 'on' : ''}" data-action="toggle-list" data-list="halfElfAsi" data-id="${a.id}" data-max="${race.asiChoice.count}" aria-pressed="${on}" ${dis ? 'disabled' : ''}>${a.name}</button>`;
         }).join('')}</div>`);
       }
       if (race.skillChoices) {
         const known = new Set([...(R.backgrounds[c.backgroundId] && !R.backgrounds[c.backgroundId].custom ? R.backgrounds[c.backgroundId].skills : c.choices.bgSkills), ...c.choices.classSkills]);
-        parts.push(`<h4>Versatilidade em Perícias: escolha 2</h4><div class="chips">${R.skills.map(s => {
+        parts.push(`<h4>Escolha ${race.skillChoices} perícia${race.skillChoices > 1 ? 's' : ''} da espécie</h4><div class="chips">${R.skills.map(s => {
           const on = c.choices.raceSkills.includes(s.id);
-          const dis = (!on && c.choices.raceSkills.length >= 2) || (!on && known.has(s.id));
-          return `<button class="chip ${on ? 'on' : ''}" data-action="toggle-list" data-list="raceSkills" data-id="${s.id}" data-max="2" aria-pressed="${on}" ${dis ? 'disabled' : ''} title="${esc(s.desc)}">${s.name}</button>`;
+          const dis = (!on && c.choices.raceSkills.length >= race.skillChoices) || (!on && known.has(s.id));
+          return `<button class="chip ${on ? 'on' : ''}" data-action="toggle-list" data-list="raceSkills" data-id="${s.id}" data-max="${race.skillChoices}" aria-pressed="${on}" ${dis ? 'disabled' : ''} title="${esc(s.desc)}">${s.name}</button>`;
         }).join('')}</div>`);
+      }
+      if (race.feat) {
+        parts.push(`<label class="field"><span>Talento escolhido (veja o capítulo de talentos do Livro do Jogador)</span><input type="text" data-bind="choices.feat" value="${esc(c.choices.feat || '')}" maxlength="60" placeholder="Ex.: Sortudo, Observador, Conjurador de Guerra…"></label>
+        <p class="muted small">O efeito do talento você anota na aba Ficha, no quadro de habilidades.</p>`);
       }
       if (race.toolChoice) {
         parts.push(`<label class="field"><span>Ferramenta de anão</span><select data-bind="choices.raceTool" data-rerender="1"><option value="">— escolha —</option>${race.toolChoice.map(t => `<option ${c.choices.raceTool === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`);
@@ -333,7 +338,7 @@
         parts.push(`<label class="field"><span>Idioma extra</span>${langSelect('choices.raceLangs', 0, c, ex)}</label>`);
       }
       extra = `<article class="detail">
-        <h3>${race.name}</h3>
+        <h3>${race.name} ${srcTag(race)}</h3>
         <dl class="facts">
           <div><dt>Atributos</dt><dd>${asiTxt(race)}</dd></div>
           <div><dt>${T('deslocamento', 'Deslocamento')}</dt><dd>${meters(race.speed)}</dd></div>
@@ -346,9 +351,18 @@
     }
     return `
     <p class="intro">A ${T('especie', 'espécie')} é a origem do seu personagem. Ela soma bônus aos ${T('atributo', 'atributos')} e dá características especiais. Não existe escolha errada: qualquer espécie funciona com qualquer classe!</p>
-    <div class="cards cards-3">
-      ${Object.entries(R.races).map(([id, r]) => `<button class="card ${c.raceId === id ? 'selected' : ''}" data-action="set-race" data-id="${id}" aria-pressed="${c.raceId === id}">
-        <strong>${r.name}</strong><span>${r.tagline}</span><span class="card-meta">${asiTxt(r)}</span></button>`).join('')}
+    <p class="muted small">Algumas espécies têm <strong>variações (sub-raças)</strong>: escolha a que mais combina com o seu personagem.</p>
+    <div class="race-groups">
+      ${R.raceGroups.map(g => {
+        const vars = Object.entries(R.races).filter(([, r]) => r.group === g.id);
+        const open = vars.some(([id]) => id === c.raceId);
+        return `<section class="race-group ${open ? 'open' : ''}">
+          <header><h3>${g.name}</h3><span class="muted small">${g.desc}${vars.length > 1 ? ` · ${vars.length} variações` : ''}</span></header>
+          <div class="cards cards-3">${vars.map(([id, r]) => `<button class="card ${c.raceId === id ? 'selected' : ''}" data-action="set-race" data-id="${id}" aria-pressed="${c.raceId === id}">
+            <span class="path-badges">${srcTag(r)}</span>
+            <strong>${r.name}</strong><span>${r.tagline}</span><span class="card-meta">${asiTxt(r)} · ${meters(r.speed)}</span></button>`).join('')}</div>
+        </section>`;
+      }).join('')}
     </div>${extra}`;
   }
 
@@ -1108,7 +1122,7 @@
         if (c.classId !== id) { c.classId = id; resetClassChoices(c); }
         done(); return showDetail();
       case 'set-race':
-        if (c.raceId !== id) { c.raceId = id; Object.assign(c.choices, { raceSkills: [], halfElfAsi: [], raceTool: '', dragon: '', elfCantrip: '', raceLangs: [] }); }
+        if (c.raceId !== id) { c.raceId = id; Object.assign(c.choices, { raceSkills: [], halfElfAsi: [], raceTool: '', dragon: '', elfCantrip: '', raceLangs: [], feat: '' }); }
         done(); return showDetail();
       case 'set-bg':
         if (c.backgroundId !== id) { c.backgroundId = id; Object.assign(c.choices, { bgSkills: [], bgLangs: [], bgToolLang: [], bgIdea: '' }); }
