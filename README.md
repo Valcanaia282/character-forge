@@ -11,6 +11,8 @@ Ele pergunta o que você quer jogar, explica cada escolha com linguagem simples 
 | **Criador guiado** | 10 etapas: conceito → classe → espécie → antecedente → atributos → perícias e magias → equipamento → história → revisão → ficha final. Prévia da ficha atualizada em tempo real. |
 | **Aba Ficha (edição livre)** | A ficha de jogo depois da criação: subir de nível (até 12, com PV, proficiência, espaços de magia e recursos recalculados), PV atuais e temporários com botões de dano/cura, testes contra a morte, condições, espaços e recursos gastos, descansos curto/longo, ajuste manual de qualquer número (com botão para voltar ao automático), perícias, ataques, itens, moedas, magias e recursos personalizados, habilidades novas e anotações. Tudo vai para a ficha impressa/PDF. |
 | **Caminhos e trilhas (nível 1–12)** | Todas as subclasses do Livro do Jogador e do Guia de Xanathar, com página de referência, resumo do estilo e “para onde vai” até o nível 12. O jogador marca o caminho planejado (ou escolhe já no 1º nível, no caso de Clérigo, Feiticeiro e Bruxo), e a ficha mostra a trilha nível a nível. |
+| **Recomendações** | Antecedentes (os 13 do Livro do Jogador + personalizado), idiomas e ferramentas sugeridos conforme classe, caminho e espécie, com o motivo de cada sugestão. |
+| **Habilidades automáticas** | Todas as habilidades de classe do nível 1 ao 12 e os 12 caminhos do SRD calculados na ficha (Ataque Furtivo, Fúria, chi, Aura de Proteção, ataques extras, deslocamento etc.). Nos demais caminhos, a ficha indica nível e página do livro. |
 | **Descubra seu aventureiro** | Quiz de 5 perguntas que recomenda as 3 classes que mais combinam com você. |
 | **Ficha inteligente** | Cálculo automático de PV, CA (testa todas as opções e usa a melhor), iniciativa, resistências, perícias, ataques, CD e ataque mágico, recursos de classe. Validação de regras com atalhos para corrigir. |
 | **Gerador de histórias** | Perguntas de origem (motivação, medo, confiança, objetivo, segredo) com ideias clicáveis e um rascunho editável. |
@@ -42,6 +44,11 @@ index.html               página única (rotas por #hash)
 css/styles.css           tema visual + layout de impressão da ficha
 js/data/rules-srd51.js   TODAS as regras (classes, espécies, armas, magias…) — troque este arquivo para mudar de edição
 js/data/content.js       conteúdo didático: conceitos, quiz, glossário, ideias de história
+js/data/backgrounds-ldj.js antecedentes do Livro do Jogador (proficiências e resumos próprios)
+js/data/features.js      habilidades de classe por nível e caminhos do SRD
+js/data/spell-desc.js    resumos próprios das magias do SRD até o 6º círculo
+js/data/spells-index.js  índice de magias por classe e círculo (nome, escola, página)
+js/recommend.js          recomendações de antecedente, idiomas e ferramentas
 js/data/subclasses.js    caminhos (subclasses) por classe e marcos de evolução até o nível 12
 js/engine.js             motor de cálculo e validação (sem lógica visual)
 js/sheet.js              aba Ficha: ficha de jogo editável
