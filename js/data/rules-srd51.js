@@ -420,7 +420,7 @@ CF.RULES = {
   /* ----------------------------------------------------------------- ESPÉCIES */
   races: {
     dwarf: {
-      name: 'Anão da Colina', size: 'Médio', speed: 7.5, darkvision: true,
+      name: 'Anão da Colina', group: 'anao', src: 'srd', size: 'Médio', speed: 7.5, darkvision: true,
       asi: { con: 2, wis: 1 }, hpPerLevel: 1,
       languages: ['Comum', 'Anão'], weapons: ['battleaxe', 'handaxe', 'lighthammer', 'warhammer'],
       toolChoice: ['Ferramentas de ferreiro', 'Ferramentas de cervejeiro', 'Ferramentas de pedreiro'],
@@ -435,7 +435,7 @@ CF.RULES = {
       ]
     },
     elf: {
-      name: 'Alto Elfo', size: 'Médio', speed: 9, darkvision: true,
+      name: 'Alto Elfo', group: 'elfo', src: 'srd', size: 'Médio', speed: 9, darkvision: true,
       asi: { dex: 2, int: 1 }, skills: ['perception'],
       languages: ['Comum', 'Élfico'], extraLanguages: 1, weapons: ['longsword', 'shortsword', 'shortbow', 'longbow'],
       cantrip: 'wizard',
@@ -451,7 +451,7 @@ CF.RULES = {
       ]
     },
     halfling: {
-      name: 'Halfling Pés-Leves', size: 'Pequeno', speed: 7.5,
+      name: 'Halfling Pés Leves', group: 'halfling', src: 'srd', size: 'Pequeno', speed: 7.5,
       asi: { dex: 2, cha: 1 },
       languages: ['Comum', 'Halfling'],
       tagline: 'Pequenos, sortudos e surpreendentemente corajosos.',
@@ -463,7 +463,7 @@ CF.RULES = {
       ]
     },
     human: {
-      name: 'Humano', size: 'Médio', speed: 9,
+      name: 'Humano (padrão)', group: 'humano', src: 'srd', size: 'Médio', speed: 9,
       asi: { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 },
       languages: ['Comum'], extraLanguages: 1,
       tagline: 'Versáteis e ambiciosos: +1 em todos os atributos.',
@@ -472,8 +472,91 @@ CF.RULES = {
         { name: 'Idioma Extra', desc: 'Fala mais um idioma à sua escolha.' }
       ]
     },
+    mountaindwarf: {
+      name: 'Anão da Montanha', group: 'anao', src: 'ldj', page: 20, size: 'Médio', speed: 7.5, darkvision: true,
+      asi: { con: 2, str: 2 }, armor: ['light', 'medium'],
+      languages: ['Comum', 'Anão'], weapons: ['battleaxe', 'handaxe', 'lighthammer', 'warhammer'],
+      toolChoice: ['Ferramentas de ferreiro', 'Ferramentas de cervejeiro', 'Ferramentas de pedreiro'],
+      tagline: 'Forte e acostumado ao peso das armaduras.',
+      traits: [
+        { name: 'Visão no Escuro', desc: 'Enxerga no escuro a até 18 m como se fosse penumbra.' },
+        { name: 'Resiliência Anã', desc: 'Vantagem em resistências contra veneno e resistência a dano de veneno.' },
+        { name: 'Treinamento Anão', desc: 'Proficiência com machado de batalha, machadinha, martelo leve e martelo de guerra.' },
+        { name: 'Treinamento com Armaduras', desc: 'Proficiência com armaduras leves e médias (ótimo para magos e feiticeiros que querem mais CA).' },
+        { name: 'Especialista em Rochas', desc: 'Em testes de História sobre trabalho em pedra, soma o dobro da proficiência.' },
+        { name: 'Deslocamento', desc: '7,5 m, que não é reduzido por armadura pesada.' }
+      ]
+    },
+    woodelf: {
+      name: 'Elfo da Floresta', group: 'elfo', src: 'ldj', page: 24, size: 'Médio', speed: 10.5, darkvision: true,
+      asi: { dex: 2, wis: 1 }, skills: ['perception'],
+      languages: ['Comum', 'Élfico'], weapons: ['longsword', 'shortsword', 'shortbow', 'longbow'],
+      tagline: 'Rápido, silencioso e em casa na mata.',
+      traits: [
+        { name: 'Visão no Escuro', desc: 'Enxerga no escuro a até 18 m como se fosse penumbra.' },
+        { name: 'Sentidos Aguçados', desc: 'Proficiência em Percepção.' },
+        { name: 'Ancestralidade Feérica', desc: 'Vantagem contra ficar enfeitiçado; magia não pode colocá-lo para dormir.' },
+        { name: 'Transe', desc: 'Medita 4 horas em vez de dormir 8.' },
+        { name: 'Treinamento Élfico', desc: 'Proficiência com espada longa, espada curta, arco curto e arco longo.' },
+        { name: 'Pés Ligeiros', desc: 'Deslocamento base de 10,5 m.' },
+        { name: 'Máscara da Natureza', desc: 'Pode tentar se esconder mesmo só levemente encoberto por fenômenos naturais (folhagem, chuva, neblina, neve).' }
+      ]
+    },
+    drow: {
+      name: 'Elfo Negro (Drow)', group: 'elfo', src: 'ldj', page: 24, size: 'Médio', speed: 9, darkvision: true,
+      asi: { dex: 2, cha: 1 }, skills: ['perception'],
+      languages: ['Comum', 'Élfico'], weapons: ['rapier', 'shortsword', 'handcrossbow'],
+      knownCantrips: ['dancinglights'], cantripAbility: 'cha',
+      raceSpells: [{ level: 3, name: 'Fogo das Fadas', per: 'descanso longo' }, { level: 5, name: 'Escuridão', per: 'descanso longo' }],
+      tagline: 'Elfo do Subterrâneo, com magia inata e visão excepcional no escuro. Converse com o mestre sobre como o mundo vê os drow.',
+      traits: [
+        { name: 'Visão no Escuro Superior', desc: 'Enxerga no escuro a até 36 m.' },
+        { name: 'Sensibilidade à Luz Solar', desc: 'Sob luz direta do sol: desvantagem em jogadas de ataque e em testes de Percepção que dependam da visão.' },
+        { name: 'Sentidos Aguçados', desc: 'Proficiência em Percepção.' },
+        { name: 'Ancestralidade Feérica', desc: 'Vantagem contra ficar enfeitiçado; magia não pode colocá-lo para dormir.' },
+        { name: 'Transe', desc: 'Medita 4 horas em vez de dormir 8.' },
+        { name: 'Magia Drow', desc: 'Conhece o truque Globos de Luz. No 3º nível lança Fogo das Fadas e no 5º nível Escuridão, uma vez por descanso longo cada (Carisma).' },
+        { name: 'Treinamento com Armas Drow', desc: 'Proficiência com rapieira, espada curta e besta de mão.' }
+      ]
+    },
+    stouthalfling: {
+      name: 'Halfling Robusto', group: 'halfling', src: 'ldj', page: 28, size: 'Pequeno', speed: 7.5,
+      asi: { dex: 2, con: 1 },
+      languages: ['Comum', 'Halfling'],
+      tagline: 'Pequeno, sortudo e resistente a venenos.',
+      traits: [
+        { name: 'Sortudo', desc: 'Quando tirar 1 no d20 de um ataque, teste ou resistência, pode rolar de novo e usar o novo resultado.' },
+        { name: 'Bravura', desc: 'Vantagem em resistências contra ficar amedrontado.' },
+        { name: 'Agilidade Halfling', desc: 'Pode passar pelo espaço de criaturas de tamanho maior que o seu.' },
+        { name: 'Resiliência dos Robustos', desc: 'Vantagem em resistências contra veneno e resistência a dano de veneno.' }
+      ]
+    },
+    varianthuman: {
+      name: 'Humano (traços alternativos)', group: 'humano', src: 'ldj', page: 31, size: 'Médio', speed: 9,
+      asi: {}, asiChoice: { count: 2, amount: 1, exclude: [] }, skillChoices: 1, feat: true,
+      languages: ['Comum'], extraLanguages: 1,
+      tagline: 'Versão opcional (pergunte ao mestre): +1 em dois atributos, uma perícia e um talento já no 1º nível.',
+      traits: [
+        { name: 'Atributos', desc: '+1 em dois atributos diferentes à sua escolha.' },
+        { name: 'Perícia', desc: 'Proficiência em uma perícia à sua escolha.' },
+        { name: 'Talento', desc: 'Um talento à sua escolha (veja o capítulo de talentos do Livro do Jogador).' },
+        { name: 'Idioma Extra', desc: 'Fala mais um idioma à sua escolha.' }
+      ]
+    },
+    forestgnome: {
+      name: 'Gnomo da Floresta', group: 'gnomo', src: 'ldj', page: 37, size: 'Pequeno', speed: 7.5, darkvision: true,
+      asi: { int: 2, dex: 1 },
+      languages: ['Comum', 'Gnômico'], knownCantrips: ['minorillusion'], cantripAbility: 'int',
+      tagline: 'Gnomo discreto, ilusionista nato e amigo de pequenos animais.',
+      traits: [
+        { name: 'Visão no Escuro', desc: 'Enxerga no escuro a até 18 m como se fosse penumbra.' },
+        { name: 'Esperteza Gnômica', desc: 'Vantagem em resistências de Inteligência, Sabedoria e Carisma contra magia.' },
+        { name: 'Ilusionista Nato', desc: 'Conhece o truque Ilusão Menor (Inteligência).' },
+        { name: 'Falar com Bestas Pequenas', desc: 'Comunica ideias simples a animais pequenos ou menores por sons e gestos.' }
+      ]
+    },
     dragonborn: {
-      name: 'Draconato', size: 'Médio', speed: 9,
+      name: 'Draconato', group: 'draconato', src: 'srd', size: 'Médio', speed: 9,
       asi: { str: 2, cha: 1 },
       languages: ['Comum', 'Dracônico'], dragonAncestry: true,
       tagline: 'Descendentes de dragões, com sopro elemental.',
@@ -484,7 +567,7 @@ CF.RULES = {
       ]
     },
     gnome: {
-      name: 'Gnomo das Rochas', size: 'Pequeno', speed: 7.5, darkvision: true,
+      name: 'Gnomo das Rochas', group: 'gnomo', src: 'srd', size: 'Pequeno', speed: 7.5, darkvision: true,
       asi: { int: 2, con: 1 }, fixedTools: ['Ferramentas de funileiro'],
       languages: ['Comum', 'Gnômico'],
       tagline: 'Curiosos inventores, resistentes à magia.',
@@ -496,7 +579,7 @@ CF.RULES = {
       ]
     },
     halfelf: {
-      name: 'Meio-Elfo', size: 'Médio', speed: 9, darkvision: true,
+      name: 'Meio-Elfo', group: 'meioelfo', src: 'srd', size: 'Médio', speed: 9, darkvision: true,
       asi: { cha: 2 }, asiChoice: { count: 2, amount: 1, exclude: ['cha'] },
       skillChoices: 2, languages: ['Comum', 'Élfico'], extraLanguages: 1,
       tagline: 'Entre dois mundos, carismáticos e adaptáveis.',
@@ -508,7 +591,7 @@ CF.RULES = {
       ]
     },
     halforc: {
-      name: 'Meio-Orc', size: 'Médio', speed: 9, darkvision: true,
+      name: 'Meio-Orc', group: 'meioorc', src: 'srd', size: 'Médio', speed: 9, darkvision: true,
       asi: { str: 2, con: 1 }, skills: ['intimidation'],
       languages: ['Comum', 'Orc'],
       tagline: 'Fortes e intimidadores, difíceis de derrubar.',
@@ -520,17 +603,30 @@ CF.RULES = {
       ]
     },
     tiefling: {
-      name: 'Tiefling', size: 'Médio', speed: 9, darkvision: true,
+      name: 'Tiefling', group: 'tiefling', src: 'srd', size: 'Médio', speed: 9, darkvision: true,
       asi: { cha: 2, int: 1 },
-      languages: ['Comum', 'Infernal'], knownCantrips: ['thaumaturgy'],
+      languages: ['Comum', 'Infernal'], knownCantrips: ['thaumaturgy'], cantripAbility: 'cha',
+      raceSpells: [{ level: 3, name: 'Repreensão Infernal', per: 'descanso longo' }, { level: 5, name: 'Escuridão', per: 'descanso longo' }],
       tagline: 'Marcados por uma herança infernal, enfrentam desconfiança com carisma.',
       traits: [
         { name: 'Visão no Escuro', desc: 'Enxerga no escuro a até 18 m como se fosse penumbra.' },
         { name: 'Resistência Infernal', desc: 'Resistência a dano de fogo.' },
-        { name: 'Legado Infernal', desc: 'Conhece o truque Taumaturgia (Carisma). No 3º nível ganha Repreensão Infernal.' }
+        { name: 'Legado Infernal', desc: 'Conhece o truque Taumaturgia. No 3º nível lança Repreensão Infernal e no 5º nível Escuridão, uma vez por descanso longo cada (Carisma).' }
       ]
     }
   },
+
+  raceGroups: [
+    { id: 'anao', name: 'Anão', desc: 'Resistentes e teimosos, mestres da pedra e do metal.' },
+    { id: 'elfo', name: 'Elfo', desc: 'Graciosos e longevos, com sentidos aguçados e laços com o mundo feérico.' },
+    { id: 'halfling', name: 'Halfling', desc: 'Pequenos, sortudos e corajosos.' },
+    { id: 'humano', name: 'Humano', desc: 'Versáteis e ambiciosos.' },
+    { id: 'draconato', name: 'Draconato', desc: 'Descendentes de dragões, com sopro elemental.' },
+    { id: 'gnomo', name: 'Gnomo', desc: 'Curiosos, inventivos e resistentes à magia.' },
+    { id: 'meioelfo', name: 'Meio-Elfo', desc: 'Entre dois mundos, carismáticos e adaptáveis.' },
+    { id: 'meioorc', name: 'Meio-Orc', desc: 'Fortes, intimidadores e difíceis de derrubar.' },
+    { id: 'tiefling', name: 'Tiefling', desc: 'Herança infernal, magia inata e muito carisma.' }
+  ],
 
   /* ------------------------------------------------------------- ANTECEDENTES */
   backgrounds: {
