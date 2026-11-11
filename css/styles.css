@@ -223,6 +223,15 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
 .issue-list { list-style: none; padding: 0; display: grid; gap: 8px; }
 .issue-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--bg-2); border: 1px solid var(--line-soft); border-radius: 10px; padding: 8px 12px; flex-wrap: wrap; }
 
+/* ---------- espécies agrupadas ---------- */
+.race-groups { display: grid; gap: 14px; margin: 12px 0; }
+.race-group { border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 10px 14px 4px; background: rgba(0, 0, 0, .12); }
+.race-group.open { border-color: var(--gold); }
+.race-group header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.race-group h3 { margin: 4px 0; }
+.race-group .cards { margin: 8px 0; }
+.detail h3 .src { vertical-align: middle; margin-left: 6px; }
+
 /* ---------- caminhos e trilhas ---------- */
 .paths { margin-top: 26px; padding-top: 6px; border-top: 1px solid var(--line-soft); }
 .card.path { gap: 8px; }
