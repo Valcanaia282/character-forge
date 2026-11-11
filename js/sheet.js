@@ -10,7 +10,7 @@
     const sh = c.sheet;
     ['death', 'coins'].forEach(k => { sh[k] = Object.assign(E.defaultSheet()[k], sh[k] || {}); });
     if (!sh.coinsInit && c.backgroundId) {
-      sh.coins.po = c.backgroundId === 'acolyte' ? 15 : c.backgroundId === 'custom' ? 10 : 0;
+      sh.coins.po = (R.backgrounds[c.backgroundId] || {}).gold || 0;
       sh.coinsInit = true;
     }
     if ((sh.features || '').trim()) {
@@ -27,6 +27,7 @@
   const circleName = n => (Number(n) === 0 ? 'Truques' : `${n}º círculo`);
   const fold = t => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const IDX = () => CF.SPELL_INDEX || [];
+  const DESC = name => (CF.SPELL_DESC || {})[(name || '').trim()] || null;
   const idxByName = name => IDX().find(e => e.n.toLowerCase() === (name || '').trim().toLowerCase());
   const SCHOOL_TAG = { abjuração: 'suporte', adivinhação: 'utilidade', conjuração: 'utilidade', encantamento: 'controle', evocação: 'dano', ilusão: 'controle', necromancia: 'dano', transmutação: 'utilidade' };
 
@@ -49,7 +50,7 @@
     const lists = f.all && acc.secrets ? null : acc.lists;
     const q = fold(f.q);
     return IDX().filter(e =>
-      (!lists || e.c.some(k => lists.includes(k))) &&
+      (!lists || e.c.some(k => lists.includes(k)) || acc.extra.includes(e.n)) &&
       (e.l === 0 ? acc.cantrips : e.l <= acc.max) &&
       (f.circle === 'all' || e.l === Number(f.circle)) &&
       (!q || fold(e.n).includes(q))
@@ -66,7 +67,7 @@
         return `<li class="${e.have ? 'have' : ''}">
           <div class="sp-pick-info"><b>${esc(e.n)}</b>
             <small>${e.l === 0 ? 'truque' : e.l + 'º círculo'} · ${e.s}${e.r ? ' · ritual' : ''}${e.p ? ' · LdJ p. ' + e.p : ''}${others.length ? ' · lista: ' + others.map(k => R.classes[k].name).join(', ') : ''}</small>
-            ${srd ? `<span class="sp-mini">${esc(srd.desc)}</span>` : ''}</div>
+            ${srd ? `<span class="sp-mini">${esc(srd.desc)}</span>` : DESC(e.n) ? `<span class="sp-mini">${esc(DESC(e.n).d)}</span>` : '<span class="sp-mini muted">Descrição no Livro do Jogador.</span>'}</div>
           ${e.have ? '<span class="have-tag">✓ no quadro</span>' : `<button class="btn sm" data-action="sp-add-idx" data-id="${esc(e.n)}">+ Adicionar</button>`}
         </li>`;
       }).join('')}</ul>`;
@@ -102,6 +103,10 @@
       if (sc.type === 'spellbook') c.choices.spells.forEach(id => sp(id) && add(id, sp(id).name, sp(id).lvl, c.choices.prepared.includes(id), 'No grimório'));
       if (sc.type === 'prepared') c.choices.prepared.forEach(id => sp(id) && add(id, sp(id).name, sp(id).lvl, true));
     }
+    E.spellAccess(c, d.level).always.forEach(name => {
+      const srd = srdByName(name); const ix = idxByName(name);
+      if (srd || ix) add(srd ? srd.id : '', srd ? srd.name : ix.n, srd ? srd.lvl : ix.l, true, 'Sempre preparada pelo caminho');
+    });
     (c.sheet.extraSpells || []).forEach(x => {
       if (!(x.name || '').trim()) return;
       const srd = srdByName(x.name);
@@ -147,9 +152,9 @@
               <input type="text" class="sp-name" data-st="sheet.spells.${i}.name" value="${esc(x.name)}" aria-label="Nome da magia">
               <button class="mini danger" data-action="sp-del" data-id="${i}" aria-label="Remover ${esc(x.name)}">✕</button>
             </div>
-            <div class="sp-tags">${srd ? `<span class="tag tag-${srd.tag}">${srd.tag}</span>${srd.ritual ? '<span class="tag">ritual</span>' : ''}` : ix ? `<span class="tag tag-${SCHOOL_TAG[ix.s] || 'utilidade'}">${ix.s}</span>${ix.r ? '<span class="tag">ritual</span>' : ''}` : '<span class="tag">anotada</span>'}
+            <div class="sp-tags">${srd ? `<span class="tag tag-${srd.tag}">${srd.tag}</span>${srd.ritual ? '<span class="tag">ritual</span>' : ''}` : ix ? `<span class="tag tag-${(DESC(x.name) || {}).t || SCHOOL_TAG[ix.s] || 'utilidade'}">${(DESC(x.name) || {}).t || ix.s}</span><span class="tag">${ix.s}</span>${ix.r ? '<span class="tag">ritual</span>' : ''}` : '<span class="tag">anotada</span>'}
               ${canPrep ? `<button class="prep-btn ${x.prep ? 'on' : ''}" data-action="sp-prep" data-id="${i}" aria-pressed="${!!x.prep}">${x.prep ? '✓ Preparada' : 'Preparar'}</button>` : ''}</div>
-            ${srd ? `<p class="sp-desc">${esc(srd.desc)}</p>` : ix && ix.p ? `<p class="sp-desc muted">📖 Descrição no Livro do Jogador, p. ${ix.p}.</p>` : ''}
+            ${srd ? `<p class="sp-desc">${esc(srd.desc)}</p>` : DESC(x.name) ? `<p class="sp-desc">${esc(DESC(x.name).d)}${ix && ix.p ? ` <small class="muted">(LdJ p. ${ix.p})</small>` : ''}</p>` : ix && ix.p ? `<p class="sp-desc muted">📖 Magia exclusiva do Livro do Jogador: veja a p. ${ix.p}.</p>` : ''}
             <input type="text" class="sp-notes" data-st="sheet.spells.${i}.notes" value="${esc(x.notes)}" placeholder="${srd ? 'Anotações' : 'Resumo: tempo, alcance, efeito, dano…'}" aria-label="Anotações da magia">
           </div>`;
         }).join('')}
@@ -203,14 +208,14 @@
     // Sugestões da trilha até o nível atual
     const names = new Set(sh.abilities.map(a => (a.name || '').toLowerCase()));
     const sugg = [];
-    if (pc) P.track(c.classId, c.choices.subclass).filter(r => r.lv >= 2 && r.lv <= d.level).forEach(r => r.items.forEach(it => {
+    if (false) P.track(c.classId, c.choices.subclass).filter(r => r.lv >= 2 && r.lv <= d.level).forEach(r => r.items.forEach(it => {
       if (!['class', 'sub', 'pick'].includes(it.k)) return;
       let name = it.t, src = 'Classe';
       if (it.k === 'pick') { name = sub ? sub.name : `${pc.term} (escolha no livro)`; src = 'Caminho'; }
       if (it.k === 'sub') { name = sub ? `${sub.name} (nível ${r.lv})` : `Habilidade do caminho (nível ${r.lv})`; src = 'Caminho'; }
       if (!names.has(name.toLowerCase())) sugg.push({ lv: r.lv, name, src });
     }));
-    const autoCards = d.features.map(f => `<div class="ab-card auto"><div class="ab-h"><b>${esc(f.name)}</b><span class="src-chip">${esc(f.src)}</span></div>${f.desc ? `<p>${esc(f.desc)}</p>` : ''}</div>`).join('');
+    const autoCards = d.features.slice().sort((a, b) => (b.lvl || 0) - (a.lvl || 0)).map(f => `<div class="ab-card auto ${f.book ? 'book' : ''} ${f.lvl === d.level ? 'new' : ''}"><div class="ab-h"><b>${esc(f.name)}</b><span class="src-chip">${esc(f.src)}</span></div>${f.desc ? `<p>${esc(f.desc)}</p>` : ''}</div>`).join('');
     const mine = sh.abilities.map((a, i) => {
       const max = Math.max(0, Math.min(20, parseInt(a.max, 10) || 0));
       return `<div class="ab-card mine">
@@ -234,7 +239,7 @@
         ${sugg.length ? `<div class="ab-sugg"><span class="small muted">Ganhou até o nível ${d.level} — clique para criar o cartão:</span><div class="chips small">${sugg.map(x => `<button class="chip" data-action="ab-suggest" data-id="${esc(x.name)}" data-src="${x.src}" data-lv="${x.lv}">+ Nv ${x.lv}: ${esc(x.name)}</button>`).join('')}</div></div>` : ''}
         <div class="ab-grid">${mine || '<p class="muted small">Nenhuma habilidade adicionada. Use as sugestões acima ou “+ Nova habilidade”.</p>'}</div>
         <button class="btn sm" data-action="row-add" data-list="abilities">+ Nova habilidade</button>
-        <h4>Do assistente (classe, caminho, espécie e antecedente) <span class="count">${d.features.length}</span></h4>
+        <h4>Calculadas automaticamente até o nível ${d.level} (classe, caminho, espécie e antecedente) <span class="count">${d.features.length}</span></h4>
         <div class="ab-grid">${autoCards}</div>
       </div>
     </section>`;
@@ -356,7 +361,7 @@
 
         <section class="lcard lc-skills"><h3>🎯 Perícias</h3><ul class="lskills">${skills}</ul><p class="tiny muted">○ sem treino · ● treinada · ◆ especialização (clique para alternar)</p></section>
 
-        <section class="lcard lc-attacks"><h3>🗡️ Ataques</h3>
+        <section class="lcard lc-attacks"><h3>🗡️ Ataques <span class="count">${d.attacksPerAction} por ação Atacar</span></h3>
           <table class="lt"><thead><tr><th>Arma</th><th>Acerto</th><th>Dano</th></tr></thead><tbody>
           ${d.attacks.filter(a => !a.custom).map(a => `<tr><td>${a.name}${a.notes.length ? `<small>${a.notes.join('; ')}</small>` : ''}</td><td>${sign(a.bonus)}</td><td>${a.damage}${a.versatile ? `<small>2 mãos: ${a.versatile}</small>` : ''}</td></tr>`).join('')}
           </tbody></table>
@@ -484,7 +489,7 @@
         const e = idxByName(id);
         if (!e) return false;
         const acc = E.spellAccess(c, d.level);
-        const allowed = (e.l === 0 ? acc.cantrips : e.l <= acc.max) && (acc.secrets || e.c.some(k => acc.lists.includes(k)));
+        const allowed = (e.l === 0 ? acc.cantrips : e.l <= acc.max) && (acc.secrets || e.c.some(k => acc.lists.includes(k)) || acc.extra.includes(e.n));
         if (!allowed) { ui.toast('Essa magia não está liberada para sua classe neste nível.'); return false; }
         sh.spells.push({ sid: e.id || '', name: e.n, circle: e.l, prep: !PREPARERS.includes(c.classId), notes: '' });
         ui.toast(`${e.n} adicionada ao quadro.`);

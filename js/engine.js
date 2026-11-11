@@ -55,6 +55,10 @@ CF.engine = (function () {
     }
     if (c.classId === 'sorcerer' && sub === 'divinesoul') out.lists.push('cleric');
     out.secrets = c.classId === 'bard' && (level >= 10 || (sub === 'lore' && level >= 6));
+    out.extra = []; out.always = [];
+    const ss = CF.FEATURES && CF.FEATURES.subSpells[sub];
+    const ownsSub = ss && CF.PATHS && CF.PATHS.classes[c.classId] && CF.PATHS.classes[c.classId].options.some(o => o.id === sub) && level >= CF.PATHS.classes[c.classId].pickLevel;
+    if (ownsSub) Object.keys(ss).filter(k => k !== 'mode' && Number(k) <= level).forEach(k => { out.extra.push(...ss[k]); if (ss.mode === 'always') out.always.push(...ss[k]); });
     return out;
   }
 
@@ -64,7 +68,7 @@ CF.engine = (function () {
       id: uid(), version: 1, createdAt: Date.now(), updatedAt: Date.now(), step: 0,
       name: '', player: '', concept: '', classId: '', raceId: '', backgroundId: '',
       abilities: { method: 'standard', standard: { str: null, dex: null, con: null, int: null, wis: null, cha: null }, pointbuy: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 }, manual: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } },
-      choices: { classSkills: [], raceSkills: [], bgSkills: [], raceLangs: [], bgLangs: [], bgToolLang: [], tools: [], raceTool: '', fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], dragon: '', sorcDragon: '', halfElfAsi: [], elfCantrip: '', cantrips: [], spells: [], prepared: [], bgIdea: '', subclass: '', feat: '' },
+      choices: { classSkills: [], raceSkills: [], bgSkills: [], raceLangs: [], bgLangs: [], bgToolLang: [], tools: [], raceTool: '', fightingStyle: '', favoredEnemy: '', terrain: '', expertise: [], dragon: '', sorcDragon: '', halfElfAsi: [], elfCantrip: '', cantrips: [], spells: [], prepared: [], bgIdea: '', subclass: '', feat: '', bgTools: [], bgSwap: {} },
       equipment: { groups: {}, picks: {} },
       story: { alignment: '', age: '', appearance: '', motivation: '', fear: '', trust: '', goal: '', secret: '', traits: '', ideals: '', bonds: '', flaws: '', backstory: '' }
     };
@@ -122,6 +126,21 @@ CF.engine = (function () {
     return cls && cls.subclass && c.choices.subclass === cls.subclass.id ? cls.subclass : null;
   }
 
+  /** Perícias do antecedente; se repetirem uma da espécie, usa a troca escolhida pelo jogador. */
+  function bgSkillList(c) {
+    const bg = R.backgrounds[c.backgroundId];
+    if (!bg || bg.custom) return [];
+    const swap = c.choices.bgSwap || {};
+    return bg.skills.map(s => swap[s] || s);
+  }
+  /** Perícias do antecedente que repetem perícias dadas pela espécie (precisam de troca). */
+  function bgSkillConflicts(c) {
+    const bg = R.backgrounds[c.backgroundId], race = R.races[c.raceId];
+    if (!bg || bg.custom) return [];
+    const fromRace = new Set([...(race && race.skills ? race.skills : []), ...(c.choices.raceSkills || [])]);
+    return bg.skills.filter(s => fromRace.has(s));
+  }
+
   /* ---------------------------------------------------------- Equipamento */
   function classEquipmentGroups(c) {
     const cls = R.classes[c.classId];
@@ -175,7 +194,7 @@ CF.engine = (function () {
 
     const skills = new Map(); // id -> origem
     const add = (id, src) => { if (id && !skills.has(id)) skills.set(id, src); };
-    if (bg && !bg.custom) bg.skills.forEach(s => add(s, bg.name));
+    if (bg && !bg.custom) bgSkillList(c).forEach(s => add(s, bg.name));
     if (bg && bg.custom) c.choices.bgSkills.forEach(s => add(s, 'Antecedente'));
     if (race && race.skills) race.skills.forEach(s => add(s, race.name));
     if (race && race.skillChoices) c.choices.raceSkills.forEach(s => add(s, race.name));
@@ -192,6 +211,8 @@ CF.engine = (function () {
     if (race && race.fixedTools) tools.push(...race.fixedTools);
     if (race && race.toolChoice && c.choices.raceTool) tools.push(c.choices.raceTool);
     if (bg && bg.custom) c.choices.bgToolLang.forEach(t => { if (!t) return; if (R.languages.includes(t)) languages.add(t); else tools.push(t); });
+    if (bg && bg.tools) tools.push(...bg.tools);
+    if (bg && bg.toolChoice) (c.choices.bgTools || []).slice(0, bg.toolChoice.count).forEach(t => t && tools.push(t));
     const expertise = new Set(cls && cls.expertise ? c.choices.expertise : []);
     return { armor, weapons, skills, languages: [...languages], tools: [...new Set(tools)], expertise };
   }
@@ -255,16 +276,23 @@ CF.engine = (function () {
     let speed = race ? race.speed : 9;
     let speedNote = '';
     if (wornArmor && wornArmor.str && s.str < wornArmor.str && c.raceId !== 'dwarf') { speed -= 3; speedNote = 'Força abaixo de ' + wornArmor.str + ' para ' + wornArmor.name + ': −3 m'; }
+    if (c.classId === 'monk' && level >= 2 && !wornArmor && !hasShield) speed += level >= 10 ? 6 : level >= 6 ? 4.5 : 3;
+    if (c.classId === 'barbarian' && level >= 5 && !(wornArmor && wornArmor.cat === 'heavy')) speed += 3;
+    // Versatilidade (Bardo) e Atleta Notável (Campeão)
+    const jack = c.classId === 'bard' && level >= 2 ? Math.floor(PB / 2) : 0;
+    const athlete = c.classId === 'fighter' && c.choices.subclass === 'champion' && level >= 7 ? Math.ceil(PB / 2) : 0;
+    const looseBonus = ab => Math.max(jack, ['str', 'dex', 'con'].includes(ab) ? athlete : 0);
+    const auraSave = c.classId === 'paladin' && level >= 6 ? Math.max(1, m.cha) : 0;
 
     // Perícias e resistências
     const skills = R.skills.map(sk => {
       const prof = sh.skillProf[sk.id] ?? p.skills.has(sk.id);
       const exp = prof && (sh.skillExp[sk.id] ?? p.expertise.has(sk.id));
-      return { id: sk.id, name: sk.name, ab: sk.ab, prof, exp, src: p.skills.get(sk.id) || '', bonus: m[sk.ab] + (prof ? PB * (exp ? 2 : 1) : 0) };
+      return { id: sk.id, name: sk.name, ab: sk.ab, prof, exp, src: p.skills.get(sk.id) || '', bonus: m[sk.ab] + (prof ? PB * (exp ? 2 : 1) : looseBonus(sk.ab)) };
     });
     const saves = AB.map(k => {
       const prof = sh.saveProf[k] ?? !!(cls && cls.saves.includes(k));
-      return { id: k, prof, bonus: m[k] + (prof ? PB : 0) };
+      return { id: k, prof, bonus: m[k] + (prof ? PB : 0) + auraSave };
     });
     const perception = skills.find(x => x.id === 'perception').bonus;
 
@@ -284,21 +312,26 @@ CF.engine = (function () {
       if (c.choices.fightingStyle === 'archery' && w.type === 'ranged') atk += 2;
       let dmgBonus = m[ab];
       const notes = [];
+      let dieTxt = w.dmg;
+      if (monkWeapon) { const ma = level >= 11 ? 8 : level >= 5 ? 6 : 4; const wd = Number((w.dmg.match(/d(\d+)/) || [])[1] || 0); if (ma > wd && /^1d/.test(w.dmg)) dieTxt = '1d' + ma; }
       if (c.choices.fightingStyle === 'dueling' && w.type === 'melee' && !w.props.includes('duas mãos')) { dmgBonus += 2; notes.push('+2 Duelismo se for a única arma'); }
-      if (c.classId === 'barbarian' && w.type === 'melee' && ab === 'str') notes.push('+2 de dano em Fúria');
-      if (c.classId === 'rogue' && (finesse || w.type === 'ranged')) notes.push('Ataque Furtivo +1d6');
+      if (c.classId === 'barbarian' && w.type === 'melee' && ab === 'str') notes.push(`+${level >= 9 ? 3 : 2} de dano em Fúria`);
+      if (c.classId === 'rogue' && (finesse || w.type === 'ranged')) notes.push(`Ataque Furtivo +${Math.ceil(level / 2)}d6`);
+      if (c.choices.subclass === 'champion' && c.classId === 'fighter' && level >= 3) notes.push('crítico com 19–20');
+      if (c.classId === 'paladin' && level >= 11 && w.type === 'melee') notes.push('+1d8 radiante (Destruição Aprimorada)');
+      if (c.classId === 'cleric' && c.choices.subclass === 'life' && level >= 8) notes.push('+1d8 radiante 1×/turno (Golpe Divino)');
       if (!prof) notes.push('sem proficiência');
       const versatile = (w.props.find(x => x.startsWith('versátil')) || '').match(/\((.*)\)/);
       attacks.push({
         id, name: w.name, bonus: atk, ability: ab,
-        damage: w.dmg + (dmgBonus ? ' ' + sign(dmgBonus) : '') + ' ' + w.dt,
+        damage: dieTxt + (dmgBonus ? ' ' + sign(dmgBonus) : '') + ' ' + w.dt,
         versatile: versatile ? versatile[1] + (dmgBonus ? ' ' + sign(dmgBonus) : '') : '',
         props: w.props, notes, proficient: prof
       });
     });
     if (c.classId === 'monk') {
       const ab = m.dex > m.str ? 'dex' : 'str';
-      attacks.push({ id: 'unarmed', name: 'Golpe desarmado', bonus: m[ab] + PB, ability: ab, damage: '1d4 ' + sign(m[ab]) + ' concussão', versatile: '', props: ['Artes Marciais'], notes: ['pode ser feito como ação bônus após atacar'], proficient: true });
+      attacks.push({ id: 'unarmed', name: 'Golpe desarmado', bonus: m[ab] + PB, ability: ab, damage: '1d' + (level >= 11 ? 8 : level >= 5 ? 6 : 4) + ' ' + sign(m[ab]) + ' concussão', versatile: '', props: ['Artes Marciais'], notes: ['pode ser feito como ação bônus após atacar'], proficient: true });
     }
 
     (sh.customAttacks || []).forEach((a, i) => {
@@ -350,6 +383,18 @@ CF.engine = (function () {
       if (d) features.push({ name: 'Sopro de dragão ' + d.name, desc: d.area + ', 2d6 de ' + d.dmg + ', resistência de ' + abName(d.save) + ' CD ' + (8 + m.con + PB) + '. Resistência a ' + d.dmg + '.', src: race.name });
     }
     if (race && race.feat) features.push({ name: 'Talento: ' + ((c.choices.feat || '').trim() || '(a escolher)'), desc: 'Anote o efeito do talento (Livro do Jogador, capítulo de talentos).', src: race.name });
+    // Progressão de classe (nível 2+), aumentos de atributo e caminhos
+    const FT = CF.FEATURES;
+    if (cls && FT) {
+      const ctx = { L: level, m, PB };
+      (FT.classes[c.classId] || []).filter(f => f.lvl <= level).forEach(f => features.push({ name: f.name, desc: f.desc(ctx), src: cls.name + ' ' + f.lvl, lvl: f.lvl }));
+      ((CF.PATHS && CF.PATHS.asi[c.classId]) || (CF.PATHS ? CF.PATHS.asi.default : [])).filter(l => l <= level).forEach(l => features.push({ name: 'Aumento no Valor de Atributo', desc: 'Some +2 em um atributo ou +1 em dois (máximo 20) — ou escolha um talento, se o mestre permitir. Ajuste os atributos na ficha.', src: cls.name + ' ' + l, lvl: l }));
+      if (path && path.option && level >= path.pickLevel) {
+        const subF = FT.subclasses[path.option.id];
+        if (subF && path.option.srd) subF.filter(f => f.lvl <= level).forEach(f => features.push({ name: f.name, desc: f.desc(ctx), src: path.option.name + ' ' + f.lvl, lvl: f.lvl }));
+        else if (!path.option.srd) path.data.featureLevels.filter(l => l <= level && !(l === 1 && path.pickLevel === 1)).forEach(l => features.push({ name: path.option.name + ' — habilidade de nível ' + l, desc: `Consulte ${CF.PATHS.sources[path.option.src].name}, p. ${path.option.page}, e anote o efeito no quadro de habilidades.`, src: path.option.name + ' ' + l, lvl: l, book: true }));
+      }
+    }
     if (bg) features.push({ ...bg.feature, src: bg.name });
 
     // Recursos com contagem
@@ -372,7 +417,7 @@ CF.engine = (function () {
     return {
       ready, path, scores: s, rawScores: scores, mods: m, prof: PB, hp, hitDie: cls ? 'd' + cls.hitDie : '—',
       ac: num(ov.ac) ?? best.v, acLabel: num(ov.ac) != null ? 'Ajustada manualmente' : best.label, acOptions, wornArmor, speed: num(ov.speed) ?? speed, speedNote,
-      initiative: num(ov.init) ?? m.dex, passivePerception: num(ov.passive) ?? 10 + perception, passiveComputed: 10 + perception,
+      initiative: num(ov.init) ?? m.dex + Math.max(jack, athlete), attacksPerAction: (['barbarian', 'monk', 'paladin', 'ranger'].includes(c.classId) && level >= 5) ? 2 : c.classId === 'fighter' ? (level >= 11 ? 3 : level >= 5 ? 2 : 1) : 1, passivePerception: num(ov.passive) ?? 10 + perception, passiveComputed: 10 + perception,
       skills, saves, attacks, spellcasting, raceCantrips, features, resources,
       profs: p, items, itemList: (() => {
         const left = items.slice();
@@ -382,7 +427,7 @@ CF.engine = (function () {
         return list;
       })(),
       level, profComputed, hpSuggested, computedScores, ov, sheet: sh,
-      acComputed: best.v, initComputed: m.dex, speedComputed: speed, hitDiceTotal: level,
+      acComputed: best.v, initComputed: m.dex + Math.max(jack, athlete), speedComputed: speed, hitDiceTotal: level,
       armorProfText: [...p.armor].map(a => ({ light: 'leves', medium: 'médias', heavy: 'pesadas', shield: 'escudos' }[a])).join(', ') || 'nenhuma',
       weaponProfText: [...p.weapons].map(w => w === 'simple' ? 'armas simples' : w === 'martial' ? 'armas marciais' : (R.weapons[w] || {}).name || w).join(', ')
     };
@@ -442,6 +487,8 @@ CF.engine = (function () {
     const rl = race ? race.extraLanguages || 0 : 0, bl = bg ? bg.languages || 0 : 0;
     if ((ch.raceLangs || []).slice(0, rl).filter(Boolean).length < rl) err(2, 'Escolha ' + rl + ' idioma(s) extra(s) da espécie.');
     if ((ch.bgLangs || []).slice(0, bl).filter(Boolean).length < bl) err(3, 'Escolha ' + bl + ' idioma(s) do antecedente.');
+    if (bg && bg.toolChoice && (ch.bgTools || []).filter(Boolean).length < bg.toolChoice.count) err(3, `Antecedente: falta escolher ${bg.toolChoice.count > 1 ? bg.toolChoice.count + ' × ' : ''}${bg.toolChoice.label.toLowerCase()}.`);
+    bgSkillConflicts(c).forEach(sk => { const sw = (ch.bgSwap || {})[sk]; if (!sw || sw === sk) err(3, `Você já tem ${skillName(sk)} pela espécie: escolha outra perícia no lugar.`); });
     if (bg && bg.custom) {
       if (ch.bgSkills.filter(Boolean).length !== bg.skillChoices) err(3, 'Escolha ' + bg.skillChoices + ' perícias para o antecedente personalizado.');
       if (ch.bgToolLang.filter(Boolean).length < bg.toolOrLanguage) err(3, 'Escolha ' + bg.toolOrLanguage + ' idiomas ou ferramentas para o antecedente.');
@@ -458,7 +505,7 @@ CF.engine = (function () {
     }
     if (race && race.skillChoices && ch.raceSkills.length !== race.skillChoices) err(2, 'Escolha ' + race.skillChoices + ' perícias da espécie.');
     // Duplicatas
-    const all = [...(bg && !bg.custom ? bg.skills : ch.bgSkills), ...(race && race.skills ? race.skills : []), ...ch.raceSkills, ...ch.classSkills].filter(Boolean);
+    const all = [...(bg && !bg.custom ? bgSkillList(c) : ch.bgSkills), ...(race && race.skills ? race.skills : []), ...ch.raceSkills, ...ch.classSkills].filter(Boolean);
     const dup = all.filter((x, i) => all.indexOf(x) !== i);
     if (dup.length) err(5, 'Perícia repetida: ' + [...new Set(dup)].map(skillName).join(', ') + '. Troque por outra.');
 
@@ -496,5 +543,5 @@ CF.engine = (function () {
     return out;
   }
 
-  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, pathInfo, activeSub, defaultSheet, profByLevel, slotsFor, spellAccess, proficiencies, weaponProficient, derive, spellList, validate };
+  return { AB, mod, sign, abName, skillName, newCharacter, baseScores, racialBonus, finalScores, pointBuyCost, suggestStandard, suggestPointBuy, classEquipmentGroups, selectedOption, pickKey, equipmentItems, itemName, pathInfo, activeSub, bgSkillList, bgSkillConflicts, defaultSheet, profByLevel, slotsFor, spellAccess, proficiencies, weaponProficient, derive, spellList, validate };
 })();

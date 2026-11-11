@@ -299,6 +299,23 @@
       ${R.languages.filter(l => l === val || !exclude.includes(l)).map(l => `<option ${l === val ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   }
   function knownLanguages(c) { return E.proficiencies(c).languages; }
+  /** Chips de idiomas recomendados; clicar preenche o primeiro campo vazio da lista indicada. */
+  function langRecs(c, arrPath, slots) {
+    if (!CF.recommend || !slots) return '';
+    const recs = CF.recommend.languages(c, knownLanguages(c));
+    if (!recs.length) return '';
+    return `<div class="rec">💡 <b>Idiomas recomendados:</b> <span class="chips small">${recs.map(r => `<button class="chip" data-action="lang-rec" data-id="${esc(r.lang)}" data-arr="${arrPath}" data-slots="${slots}" title="${esc(r.why)}">${esc(r.lang)} <small>· ${esc(r.why)}</small></button>`).join('')}</span></div>`;
+  }
+  /** Select de ferramentas com as recomendadas no topo (★). */
+  function toolSelect(arrPath, idx, c, list, label, taken) {
+    const val = ((getPath(c, arrPath) || [])[idx]) || '';
+    const rec = CF.recommend ? CF.recommend.tools(c) : new Map();
+    const avail = list.filter(t => t === val || !taken.includes(t));
+    const top = avail.filter(t => rec.has(t)), rest = avail.filter(t => !rec.has(t));
+    return `<select data-arr="${arrPath}" data-idx="${idx}" aria-label="${esc(label)} ${idx + 1}"><option value="">— ${esc(label.toLowerCase())} —</option>
+      ${top.length ? `<optgroup label="Recomendadas para você">${top.map(t => `<option value="${esc(t)}" ${t === val ? 'selected' : ''}>★ ${esc(t)} — ${esc(rec.get(t))}</option>`).join('')}</optgroup>` : ''}
+      <optgroup label="Todas">${rest.map(t => `<option value="${esc(t)}" ${t === val ? 'selected' : ''}>${esc(t)}</option>`).join('')}</optgroup></select>`;
+  }
 
   function stepRace(c) {
     const race = R.races[c.raceId];
@@ -335,7 +352,7 @@
       }
       if (race.extraLanguages) {
         const ex = knownLanguages(c);
-        parts.push(`<label class="field"><span>Idioma extra</span>${langSelect('choices.raceLangs', 0, c, ex)}</label>`);
+        parts.push(`<label class="field"><span>Idioma extra</span>${langSelect('choices.raceLangs', 0, c, ex)}</label>${langRecs(c, 'choices.raceLangs', race.extraLanguages)}`);
       }
       extra = `<article class="detail">
         <h3>${race.name} ${srcTag(race)}</h3>
@@ -369,6 +386,16 @@
   /* ----------------------------------------------------------------- Etapa 4 */
   function stepBackground(c) {
     const bg = R.backgrounds[c.backgroundId];
+    const cls = R.classes[c.classId];
+    const recs = CF.recommend ? CF.recommend.backgrounds(c) : [];
+    const top = recs.slice(0, 3).filter(r => r.score > 0);
+    const topIds = top.map(r => r.id);
+    const srcTag = b => b.src === 'ldj' ? `<span class="src src-ldj">LdJ p. ${b.page}</span>` : b.src === 'srd' ? `<span class="src src-srd">SRD</span>` : '';
+    const card = (id, b, why) => `<button class="card ${c.backgroundId === id ? 'selected' : ''}" data-action="set-bg" data-id="${id}" aria-pressed="${c.backgroundId === id}">
+        <span class="path-badges">${srcTag(b)}${why ? '<span class="badge">★ recomendado</span>' : ''}</span>
+        <strong>${b.name}</strong><span>${b.tagline}</span>
+        ${b.skills ? `<span class="card-meta">${b.skills.map(E.skillName).join(', ')}</span>` : ''}
+        ${why ? `<span class="why">${esc(why)}</span>` : ''}</button>`;
     let detail = '';
     if (bg) {
       const parts = [];
@@ -386,23 +413,38 @@
           return `<select data-arr="choices.bgToolLang" data-idx="${i}" aria-label="Idioma ou ferramenta ${i + 1}"><option value="">— escolha —</option>
             <optgroup label="Idiomas">${R.languages.filter(l => l === v || !known.includes(l)).map(l => `<option ${l === v ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>
             <optgroup label="Ferramentas">${R.toolLists.toolOrLanguage.filter(t => !R.languages.includes(t)).map(t => `<option ${t === v ? 'selected' : ''}>${t}</option>`).join('')}</optgroup></select>`;
-        }).join('')}</div>`);
+        }).join('')}</div>${langRecs(c, 'choices.bgToolLang', 2)}`);
       } else {
-        parts.push(`<p><strong>Perícias:</strong> ${bg.skills.map(E.skillName).join(', ')}</p>`);
-        if (bg.languages) parts.push(`<h4>Escolha ${bg.languages} idiomas</h4><div class="field-row">${Array.from({ length: bg.languages }, (_, i) => langSelect('choices.bgLangs', i, c, known)).join('')}</div>`);
+        const conflicts = E.bgSkillConflicts(c);
+        const taken = new Set([...E.proficiencies(c).skills.keys()]);
+        parts.push(`<p><strong>Perícias:</strong> ${E.bgSkillList(c).map(E.skillName).join(', ')}</p>`);
+        conflicts.forEach(sk => {
+          const cur = (c.choices.bgSwap || {})[sk] || '';
+          parts.push(`<label class="field"><span>Você já tem <b>${E.skillName(sk)}</b> pela espécie — escolha outra perícia no lugar</span>
+            <select data-bind="choices.bgSwap.${sk}" data-rerender="1"><option value="">— escolha —</option>${R.skills.filter(x => x.id === cur || !taken.has(x.id)).map(x => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${x.name}</option>`).join('')}</select></label>`);
+        });
+        const tools = [...(bg.tools || [])];
+        if (tools.length) parts.push(`<p><strong>Ferramentas:</strong> ${tools.join(', ')}</p>`);
+        if (bg.toolChoice) {
+          const list = R.toolLists[bg.toolChoice.list];
+          parts.push(`<h4>Escolha ${bg.toolChoice.count === 1 ? '' : bg.toolChoice.count + ' '}${bg.toolChoice.label.toLowerCase()}</h4><div class="field-row">${Array.from({ length: bg.toolChoice.count }, (_, i) => toolSelect('choices.bgTools', i, c, list, bg.toolChoice.label, (c.choices.bgTools || []).filter((_, k) => k !== i))).join('')}</div>`);
+        }
+        if (bg.languages) parts.push(`<h4>Escolha ${bg.languages} idioma${bg.languages > 1 ? 's' : ''}</h4><div class="field-row">${Array.from({ length: bg.languages }, (_, i) => langSelect('choices.bgLangs', i, c, known)).join('')}</div>${langRecs(c, 'choices.bgLangs', bg.languages)}`);
       }
-      detail = `<article class="detail"><h3>${bg.name}</h3><p>${bg.tagline}</p>
+      detail = `<article class="detail"><h3>${bg.name} ${srcTag(bg)}</h3><p>${bg.tagline}</p>
         ${parts.join('')}
-        <p><strong>Itens:</strong> ${bg.equipment.map(E.itemName).join('; ')}</p>
+        <p><strong>Itens:</strong> ${bg.equipment.map(E.itemName).join('; ')} · <strong>Dinheiro:</strong> ${bg.gold || 0} po</p>
         <p><strong>${bg.feature.name}.</strong> ${bg.feature.desc}</p></article>`;
     }
     return `
-    <p class="intro">O ${T('antecedente', 'antecedente')} conta o que você fazia antes de virar aventureiro. Ele dá ${T('pericia', 'perícias')}, idiomas e alguns itens.</p>
-    <div class="cards cards-2">
-      ${Object.entries(R.backgrounds).map(([id, b]) => `<button class="card ${c.backgroundId === id ? 'selected' : ''}" data-action="set-bg" data-id="${id}" aria-pressed="${c.backgroundId === id}">
-        <strong>${b.name}</strong><span>${b.tagline}</span></button>`).join('')}
+    <p class="intro">O ${T('antecedente', 'antecedente')} conta o que você fazia antes de virar aventureiro. Ele dá ${T('pericia', 'perícias')}, idiomas, ferramentas e alguns itens.</p>
+    ${top.length ? `<h3 class="bg-section-title">★ Recomendados para ${cls ? 'o seu ' + cls.name : 'você'}${R.races[c.raceId] ? ' ' + R.races[c.raceId].name.replace(/ \(.*\)/, '') : ''}</h3>
+    <div class="cards cards-3">${top.map(r => card(r.id, R.backgrounds[r.id], r.why.slice(0, 2).join('; '))).join('')}</div>` : ''}
+    <h3 class="bg-section-title">Todos os antecedentes</h3>
+    <div class="cards cards-3">
+      ${Object.entries(R.backgrounds).filter(([id]) => !topIds.includes(id)).map(([id, b]) => card(id, b, '')).join('')}
     </div>
-    <p class="muted small">O SRD (conteúdo aberto de D&amp;D) traz apenas o Acólito. A opção personalizada segue a ideia de montar o passado com 2 perícias e 2 idiomas/ferramentas — confirme com o mestre.</p>
+    <p class="muted small">Antecedentes do Livro do Jogador com resumos próprios (detalhes e tabelas de personalidade na página indicada). O personalizado permite montar o passado com 2 perícias e 2 idiomas/ferramentas — confirme com o mestre.</p>
     ${detail}`;
   }
 
@@ -488,7 +530,7 @@
       const tl = R.toolLists[cls.toolChoices.list];
       out.push(`<section><h3>${cls.toolChoices.label}</h3><div class="field-row">${Array.from({ length: cls.toolChoices.count }, (_, i) => {
         const v = c.choices.tools[i] || '';
-        return `<select data-arr="choices.tools" data-idx="${i}" aria-label="${cls.toolChoices.label} ${i + 1}"><option value="">— escolha —</option>${tl.filter(t => t === v || !c.choices.tools.includes(t)).map(t => `<option ${t === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+        return toolSelect('choices.tools', i, c, tl, cls.toolChoices.label, c.choices.tools.filter((_, k) => k !== i));
       }).join('')}</div></section>`);
     }
     // Estilo de luta
@@ -712,7 +754,7 @@
         <ul class="sp-list">${circles.map(n => `<li class="sp-circle">${n === 0 ? 'Truques' : n + 'º círculo'}</li>${list.filter(x => (Number(x.circle) || 0) === n).map(x => {
           const srd = x.sid ? R.spells[x.sid] : null;
           const ix = srd ? null : (CF.SPELL_INDEX || []).find(e => e.n.toLowerCase() === (x.name || '').toLowerCase());
-          return `<li><b>${prepr && n > 0 ? (x.prep ? '● ' : '○ ') : ''}${esc(x.name)}</b>${srd ? ' — ' + esc(srd.desc) : ix ? ` <small>(${ix.s}${ix.p ? ', LdJ p. ' + ix.p : ''})</small>` : ''}${x.notes ? ' — ' + esc(x.notes) : ''}</li>`;
+          return `<li><b>${prepr && n > 0 ? (x.prep ? '● ' : '○ ') : ''}${esc(x.name)}</b>${srd ? ' — ' + esc(srd.desc) : (CF.SPELL_DESC || {})[x.name] ? ' — ' + esc(CF.SPELL_DESC[x.name].d) : ix ? ` <small>(${ix.s}${ix.p ? ', LdJ p. ' + ix.p : ''})</small>` : ''}${x.notes ? ' — ' + esc(x.notes) : ''}</li>`;
         }).join('')}`).join('')}</ul>${prepr ? '<p class="tiny">● preparada · ○ não preparada</p>' : ''}</section>` : '';
     }
     return `<article class="sheet" id="sheet">
@@ -1105,6 +1147,15 @@
       case 'next': c.step = Math.min(STEPS.length - 1, c.step + 1); touch(); rerender('#stepTitle'); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
       case 'prev': c.step = Math.max(0, c.step - 1); touch(); rerender('#stepTitle'); window.scrollTo({ top: 0, behavior: 'smooth' }); return;
       case 'set-concept': c.concept = id; return done();
+      case 'lang-rec': {
+        const arr = getPath(c, el.dataset.arr) || [];
+        const slots = Number(el.dataset.slots) || 1;
+        let i = Array.from({ length: slots }, (_, k) => k).find(k => !arr[k]);
+        if (i == null) i = slots - 1;
+        arr[i] = id; setPath(c, el.dataset.arr, arr);
+        toast(`${id} adicionado aos idiomas.`);
+        return done();
+      }
       case 'set-subclass': {
         const cls = R.classes[c.classId];
         c.choices.subclass = c.choices.subclass === id ? '' : id;
@@ -1126,7 +1177,7 @@
         if (c.raceId !== id) { c.raceId = id; Object.assign(c.choices, { raceSkills: [], halfElfAsi: [], raceTool: '', dragon: '', elfCantrip: '', raceLangs: [], feat: '' }); }
         done(); return showDetail();
       case 'set-bg':
-        if (c.backgroundId !== id) { c.backgroundId = id; Object.assign(c.choices, { bgSkills: [], bgLangs: [], bgToolLang: [], bgIdea: '' }); }
+        if (c.backgroundId !== id) { c.backgroundId = id; Object.assign(c.choices, { bgSkills: [], bgLangs: [], bgToolLang: [], bgIdea: '', bgTools: [], bgSwap: {} }); }
         done(); return showDetail();
       case 'bg-idea': {
         const idea = R.customBackgroundIdeas.find(i => i.name === id);
