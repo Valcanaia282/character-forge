@@ -131,14 +131,15 @@ CF.engine = (function () {
     const bg = R.backgrounds[c.backgroundId];
     if (!bg || bg.custom) return [];
     const swap = c.choices.bgSwap || {};
-    return bg.skills.map(s => swap[s] || s);
+    return bg.skills.map(s => (swap[s] === '__pick__' ? null : swap[s] || s)).filter(Boolean);
   }
   /** Perícias do antecedente que repetem perícias dadas pela espécie (precisam de troca). */
   function bgSkillConflicts(c) {
     const bg = R.backgrounds[c.backgroundId], race = R.races[c.raceId];
     if (!bg || bg.custom) return [];
     const fromRace = new Set([...(race && race.skills ? race.skills : []), ...(c.choices.raceSkills || [])]);
-    return bg.skills.filter(s => fromRace.has(s));
+    const swap = c.choices.bgSwap || {};
+    return bg.skills.filter(s => fromRace.has(s) && (!swap[s] || swap[s] === s));
   }
 
   /* ---------------------------------------------------------- Equipamento */
@@ -488,7 +489,8 @@ CF.engine = (function () {
     if ((ch.raceLangs || []).slice(0, rl).filter(Boolean).length < rl) err(2, 'Escolha ' + rl + ' idioma(s) extra(s) da espécie.');
     if ((ch.bgLangs || []).slice(0, bl).filter(Boolean).length < bl) err(3, 'Escolha ' + bl + ' idioma(s) do antecedente.');
     if (bg && bg.toolChoice && (ch.bgTools || []).filter(Boolean).length < bg.toolChoice.count) err(3, `Antecedente: falta escolher ${bg.toolChoice.count > 1 ? bg.toolChoice.count + ' × ' : ''}${bg.toolChoice.label.toLowerCase()}.`);
-    bgSkillConflicts(c).forEach(sk => { const sw = (ch.bgSwap || {})[sk]; if (!sw || sw === sk) err(3, `Você já tem ${skillName(sk)} pela espécie: escolha outra perícia no lugar.`); });
+    bgSkillConflicts(c).forEach(sk => err(3, `Você já tem ${skillName(sk)} pela espécie: troque essa perícia do antecedente por outra.`));
+    if (bg && !bg.custom) Object.entries(ch.bgSwap || {}).filter(([k, v]) => v === '__pick__' && bg.skills.includes(k)).forEach(([k]) => err(3, `Antecedente: escolha a perícia que vai substituir ${skillName(k)} (que agora vem da classe).`));
     if (bg && bg.custom) {
       if (ch.bgSkills.filter(Boolean).length !== bg.skillChoices) err(3, 'Escolha ' + bg.skillChoices + ' perícias para o antecedente personalizado.');
       if (ch.bgToolLang.filter(Boolean).length < bg.toolOrLanguage) err(3, 'Escolha ' + bg.toolOrLanguage + ' idiomas ou ferramentas para o antecedente.');

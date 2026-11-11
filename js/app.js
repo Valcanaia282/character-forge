@@ -332,7 +332,7 @@
         }).join('')}</div>`);
       }
       if (race.skillChoices) {
-        const known = new Set([...(R.backgrounds[c.backgroundId] && !R.backgrounds[c.backgroundId].custom ? R.backgrounds[c.backgroundId].skills : c.choices.bgSkills), ...c.choices.classSkills]);
+        const known = new Set([...(R.backgrounds[c.backgroundId] && !R.backgrounds[c.backgroundId].custom ? E.bgSkillList(c) : c.choices.bgSkills), ...c.choices.classSkills]);
         parts.push(`<h4>Escolha ${race.skillChoices} perícia${race.skillChoices > 1 ? 's' : ''} da espécie</h4><div class="chips">${R.skills.map(s => {
           const on = c.choices.raceSkills.includes(s.id);
           const dis = (!on && c.choices.raceSkills.length >= race.skillChoices) || (!on && known.has(s.id));
@@ -415,14 +415,23 @@
             <optgroup label="Ferramentas">${R.toolLists.toolOrLanguage.filter(t => !R.languages.includes(t)).map(t => `<option ${t === v ? 'selected' : ''}>${t}</option>`).join('')}</optgroup></select>`;
         }).join('')}</div>${langRecs(c, 'choices.bgToolLang', 2)}`);
       } else {
-        const conflicts = E.bgSkillConflicts(c);
+        const conflicts = new Set(E.bgSkillConflicts(c));
         const taken = new Set([...E.proficiencies(c).skills.keys()]);
-        parts.push(`<p><strong>Perícias:</strong> ${E.bgSkillList(c).map(E.skillName).join(', ')}</p>`);
-        conflicts.forEach(sk => {
-          const cur = (c.choices.bgSwap || {})[sk] || '';
-          parts.push(`<label class="field"><span>Você já tem <b>${E.skillName(sk)}</b> pela espécie — escolha outra perícia no lugar</span>
-            <select data-bind="choices.bgSwap.${sk}" data-rerender="1"><option value="">— escolha —</option>${R.skills.filter(x => x.id === cur || !taken.has(x.id)).map(x => `<option value="${x.id}" ${x.id === cur ? 'selected' : ''}>${x.name}</option>`).join('')}</select></label>`);
-        });
+        const swap = c.choices.bgSwap || {};
+        parts.push(`<h4>Perícias do antecedente</h4>
+          <p class="muted small">Pela regra, se uma perícia do antecedente repetir outra que você já tem (da espécie ou da classe), você escolhe outra no lugar. Trocas por gosto pessoal: combine com o mestre.</p>
+          <div class="bg-skills">${bg.skills.map(orig => {
+            const cur = swap[orig] && swap[orig] !== orig ? swap[orig] : '';
+            const pending = cur === '__pick__';
+            const now = pending ? '' : (cur || orig);
+            const opts = R.skills.filter(x => x.id === now || x.id === orig || !taken.has(x.id));
+            const flag = pending ? `<small class="warn">${E.skillName(orig)} agora vem da classe — escolha a substituta</small>` : conflicts.has(orig) ? `<small class="warn">repete a perícia da espécie — troque</small>` : cur ? `<small class="muted">trocada (era ${E.skillName(orig)})</small>` : '';
+            return `<label class="field bg-skill ${pending || conflicts.has(orig) ? 'need' : ''}"><span>${E.skillName(orig)} ${flag}</span>
+              <select data-bind="choices.bgSwap.${orig}" data-rerender="1">
+                ${pending ? '<option value="__pick__" selected>— escolha a substituta —</option>' : ''}
+                ${opts.map(x => `<option value="${x.id}" ${x.id === (now || orig) && !pending ? 'selected' : ''}>${x.id === orig ? 'Manter ' + x.name : x.name}</option>`).join('')}
+              </select></label>`;
+          }).join('')}</div>`);
         const tools = [...(bg.tools || [])];
         if (tools.length) parts.push(`<p><strong>Ferramentas:</strong> ${tools.join(', ')}</p>`);
         if (bg.toolChoice) {
@@ -509,20 +518,23 @@
     // Perícias
     const fixed = new Map();
     const bg = R.backgrounds[c.backgroundId];
-    (bg && !bg.custom ? bg.skills : c.choices.bgSkills).forEach(s => fixed.set(s, bg ? bg.name : ''));
+    const fromBg = new Set(bg && !bg.custom ? E.bgSkillList(c) : c.choices.bgSkills);
+    fromBg.forEach(s => fixed.set(s, bg ? bg.name : ''));
     (race && race.skills || []).forEach(s => fixed.set(s, race.name));
     c.choices.raceSkills.forEach(s => fixed.set(s, race ? race.name : ''));
     const list = cls.skillList === 'any' ? R.skills.map(s => s.id) : cls.skillList;
     out.push(`<section><h3>${T('pericia', 'Perícias')} da classe <span class="count ${c.choices.classSkills.length === cls.skillChoices ? 'ok' : ''}">${c.choices.classSkills.length}/${cls.skillChoices}</span></h3>
-      <p class="muted">Escolha ${cls.skillChoices}. Em perícias treinadas você soma +${R.proficiencyBonus} (${T('proficiencia', 'proficiência')}). As que você já tem pela espécie/antecedente aparecem marcadas.</p>
+      <p class="muted">Escolha ${cls.skillChoices}. Em perícias treinadas você soma +${R.proficiencyBonus} (${T('proficiencia', 'proficiência')}). As que você já tem pela espécie aparecem marcadas. Quer uma perícia que veio do <b>antecedente</b>? Clique nela: ela passa para a classe e você escolhe outra no antecedente.</p>
       <div class="chips">${list.map(id => {
         const sk = R.skills.find(s => s.id === id);
         const on = c.choices.classSkills.includes(id);
         const fx = fixed.has(id);
-        const dis = fx || (!on && c.choices.classSkills.length >= cls.skillChoices);
+        const bgTake = fx && fromBg.has(id) && bg && !bg.custom; // pode "pegar" do antecedente
+        const full = c.choices.classSkills.length >= cls.skillChoices;
+        const dis = (fx && !bgTake) || (!on && full);
         const bonus = d.mods[sk.ab] + R.proficiencyBonus;
-        return `<button class="chip ${on ? 'on' : ''} ${fx ? 'fixed' : ''}" data-action="toggle-list" data-list="classSkills" data-id="${id}" data-max="${cls.skillChoices}" aria-pressed="${on || fx}" ${dis ? 'disabled' : ''} title="${esc(sk.desc)}">
-          ${sk.name} <small>${R.abilities.find(a => a.id === sk.ab).short} ${sign(bonus)}</small>${fx ? ` <small>(já tem: ${esc(fixed.get(id))})</small>` : ''}</button>`;
+        return `<button class="chip ${on ? 'on' : ''} ${fx ? 'fixed' : ''} ${bgTake ? 'takeable' : ''}" data-action="${bgTake ? 'take-bg-skill' : 'toggle-list'}" data-list="classSkills" data-id="${id}" data-max="${cls.skillChoices}" aria-pressed="${on || fx}" ${dis ? 'disabled' : ''} title="${bgTake ? 'Usar como perícia da classe e escolher outra no antecedente' : esc(sk.desc)}">
+          ${sk.name} <small>${R.abilities.find(a => a.id === sk.ab).short} ${sign(bonus)}</small>${fx ? ` <small>(${bgTake ? 'do ' + esc(fixed.get(id)) + ' — clique para trocar' : 'já tem: ' + esc(fixed.get(id))})</small>` : ''}</button>`;
       }).join('')}</div></section>`);
 
     // Ferramentas
@@ -1188,11 +1200,26 @@
         return done();
       }
       case 'set-choice': c.choices[el.dataset.key] = c.choices[el.dataset.key] === id ? '' : id; return done();
+      case 'take-bg-skill': {
+        const cls = R.classes[c.classId], bg = R.backgrounds[c.backgroundId];
+        if (c.choices.classSkills.length >= cls.skillChoices) { toast(`Você já escolheu ${cls.skillChoices} perícias da classe. Desmarque uma primeiro.`); return; }
+        const swap = c.choices.bgSwap || (c.choices.bgSwap = {});
+        const orig = bg.skills.find(o => (swap[o] || o) === id);
+        if (orig == null) return;
+        swap[orig] = '__pick__';
+        c.choices.classSkills.push(id);
+        toast(`${E.skillName(id)} agora é perícia da classe. Escolha outra perícia no antecedente.`);
+        return done();
+      }
       case 'toggle-list': {
         const key = el.dataset.list, max = Number(el.dataset.max);
         const arr = c.choices[key];
         const i = arr.indexOf(id);
         if (i >= 0) arr.splice(i, 1); else if (arr.length < max) arr.push(id);
+        if (key === 'classSkills' && i >= 0) {
+          const swap = c.choices.bgSwap || {}, bg = R.backgrounds[c.backgroundId];
+          if (bg && bg.skills && bg.skills.includes(id) && swap[id] === '__pick__') delete swap[id];
+        }
         if (key === 'spells') c.choices.prepared = c.choices.prepared.filter(x => c.choices.spells.includes(x) || c.classId !== 'wizard');
         if (key === 'classSkills' || key === 'raceSkills' || key === 'bgSkills') c.choices.expertise = c.choices.expertise.filter(x => x === 'thieves' || E.proficiencies(c).skills.has(x));
         return done();
