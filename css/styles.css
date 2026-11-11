@@ -380,6 +380,11 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
 .rec b { color: var(--gold-2); }
 .card .why { font-size: .8rem !important; color: var(--gold-2) !important; }
 .bg-section-title { margin: 14px 0 4px; }
+.bg-skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 14px; }
+.bg-skill.need select { border-color: var(--red); }
+.bg-skill small.warn { color: #ffc2ba; font-weight: 600; }
+.chip.takeable { cursor: pointer; opacity: 1; border-style: dashed; }
+.chip.takeable:hover { border-color: var(--gold); }
 .ab-card.mine { border-color: rgba(212, 166, 74, .55); }
 .src-chip { font: 600 .7rem var(--sans); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
 .ab-meta { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: .82rem; color: var(--muted); }
