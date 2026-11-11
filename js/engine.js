@@ -20,7 +20,7 @@ CF.engine = (function () {
       conditions: [], slotsUsed: {}, resUsed: {}, ov: {}, skillProf: {}, skillExp: {}, saveProf: {},
       customAttacks: [], customItems: [], removedItems: [], extraSpells: [], customRes: [],
       coins: { pc: 0, pp: 0, pe: 0, po: 0, pl: 0 }, coinsInit: false, features: '', profsExtra: '', notes: '',
-      spells: [], spellsInit: false, abilities: [], abUsed: {}
+      spells: [], spellsInit: false, abilities: [], abUsed: {}, picks: {}, autoSpells: []
     };
   }
   const profByLevel = lv => 2 + Math.floor((Math.min(12, Math.max(1, lv)) - 1) / 4);
@@ -29,7 +29,11 @@ CF.engine = (function () {
   const SLOTS_FULL = [null, [2], [3], [4, 2], [4, 3], [4, 3, 2], [4, 3, 3], [4, 3, 3, 1], [4, 3, 3, 2], [4, 3, 3, 3, 1], [4, 3, 3, 3, 2], [4, 3, 3, 3, 2, 1], [4, 3, 3, 3, 2, 1]];
   const SLOTS_HALF = [null, [], [2], [3], [3], [4, 2], [4, 2], [4, 3], [4, 3], [4, 3, 2], [4, 3, 2], [4, 3, 3], [4, 3, 3]];
   const PACT = [null, [1, 1], [2, 1], [2, 2], [2, 2], [2, 3], [2, 3], [2, 4], [2, 4], [2, 5], [2, 5], [3, 5], [3, 5]]; // [quantidade, círculo]
-  function slotsFor(classId, level) {
+  const SLOTS_THIRD = [null, [], [], [2], [3], [3], [3], [4, 2], [4, 2], [4, 2], [4, 3], [4, 3], [4, 3]]; // Cavaleiro Arcano / Trapaceiro Arcano
+  const THIRD_SUBS = { fighter: 'eldritch', rogue: 'arcanetrickster' };
+  const isThird = (classId, sub) => THIRD_SUBS[classId] && THIRD_SUBS[classId] === sub;
+  function slotsFor(classId, level, sub) {
+    if (isThird(classId, sub)) return SLOTS_THIRD[Math.min(12, level)].map((n, i) => ({ circle: i + 1, n }));
     const t = { bard: 'full', cleric: 'full', druid: 'full', sorcerer: 'full', wizard: 'full', paladin: 'half', ranger: 'half', warlock: 'pact' }[classId];
     if (t === 'full') return SLOTS_FULL[level].map((n, i) => ({ circle: i + 1, n }));
     if (t === 'half') return SLOTS_HALF[level].map((n, i) => ({ circle: i + 1, n }));
@@ -59,6 +63,8 @@ CF.engine = (function () {
     const ss = CF.FEATURES && CF.FEATURES.subSpells[sub];
     const ownsSub = ss && CF.PATHS && CF.PATHS.classes[c.classId] && CF.PATHS.classes[c.classId].options.some(o => o.id === sub) && level >= CF.PATHS.classes[c.classId].pickLevel;
     if (ownsSub) Object.keys(ss).filter(k => k !== 'mode' && Number(k) <= level).forEach(k => { out.extra.push(...ss[k]); if (ss.mode === 'always') out.always.push(...ss[k]); });
+    if (CF.PROG) { const g = CF.PROG.spellGrants(c, Math.min(12, level)); out.extra.push(...g.extra); out.always.push(...g.always); }
+    out.extra = [...new Set(out.extra)]; out.always = [...new Set(out.always)];
     return out;
   }
 
@@ -215,6 +221,17 @@ CF.engine = (function () {
     if (bg && bg.tools) tools.push(...bg.tools);
     if (bg && bg.toolChoice) (c.choices.bgTools || []).slice(0, bg.toolChoice.count).forEach(t => t && tools.push(t));
     const expertise = new Set(cls && cls.expertise ? c.choices.expertise : []);
+    // Escolhas de nível, talentos e caminhos automáticos (CF.PROG)
+    if (CF.PROG && cls) {
+      const L = Math.min(12, Math.max(1, Number(c.sheet && c.sheet.level) || 1));
+      const X = CF.PROG.collect(c, L, { m: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 }, PB: profByLevel(L) });
+      X.armor.forEach(a => armor.add(a));
+      X.weapons.forEach(w => weapons.add(w));
+      X.skills.forEach(s => add(s, 'Escolha de nível'));
+      X.expertise.forEach(s => expertise.add(s));
+      X.langs.forEach(l => languages.add(l));
+      tools.push(...X.tools);
+    }
     return { armor, weapons, skills, languages: [...languages], tools: [...new Set(tools)], expertise };
   }
   function weaponProficient(id, p) {
@@ -232,6 +249,9 @@ CF.engine = (function () {
     const profComputed = profByLevel(level);
     const PB = num(ov.prof) ?? profComputed;
     const scores = finalScores(c);
+    // Aumentos de atributo e talentos escolhidos na evolução (máximo 20)
+    const asiBonus = CF.PROG ? CF.PROG.abilityBonus(c, level) : {};
+    AB.forEach(k => { if (scores[k] != null && asiBonus[k]) scores[k] = Math.max(scores[k], Math.min(20, scores[k] + asiBonus[k])); });
     const computedScores = Object.assign({}, scores);
     AB.forEach(k => { if (num(ov['ab.' + k]) != null) scores[k] = num(ov['ab.' + k]); });
     const ready = AB.every(k => scores[k] != null);
@@ -241,11 +261,14 @@ CF.engine = (function () {
     const items = equipmentItems(c);
     const sub = activeSub(c);
     const path = pathInfo(c);
+    const X = CF.PROG && cls ? CF.PROG.collect(c, level, { m, PB, s }) : { skills: [], expertise: [], saves: [], langs: [], tools: [], armor: [], weapons: [], init: 0, speed: 0, hpPerLevel: 0, passive: 0, res: [], atk: [], features: [], styles: [], attacks: 0 };
+    const styles = new Set(X.styles);
+    if (cls && cls.fightingStyle && c.choices.fightingStyle) styles.add(c.choices.fightingStyle);
 
     // PV
     let hp = null, hpSuggested = null;
     if (cls) {
-      const perLevelBonus = (race && race.hpPerLevel ? race.hpPerLevel : 0) + (sub && sub.hpPerLevel ? sub.hpPerLevel : 0);
+      const perLevelBonus = (race && race.hpPerLevel ? race.hpPerLevel : 0) + (sub && sub.hpPerLevel ? sub.hpPerLevel : 0) + X.hpPerLevel;
       const first = Math.max(1, cls.hitDie + m.con + perLevelBonus);
       const avg = Math.max(1, cls.hitDie / 2 + 1 + m.con + perLevelBonus); // média fixa por nível
       hpSuggested = first + (level - 1) * avg;
@@ -262,12 +285,14 @@ CF.engine = (function () {
     if (c.classId === 'barbarian') acOptions.push({ v: 10 + m.dex + m.con + sb, label: 'Defesa sem Armadura (10 + DES + CON' + shieldTxt + ')', armor: null });
     if (c.classId === 'monk') acOptions.push({ v: 10 + m.dex + m.wis, label: 'Defesa sem Armadura (10 + DES + SAB, sem escudo)', armor: null });
     if (c.classId === 'sorcerer' && sub) acOptions.push({ v: 13 + m.dex + sb, label: 'Resiliência Dracônica (13 + DES' + shieldTxt + ')', armor: null });
+    if (X.mageArmor) acOptions.push({ v: 13 + m.dex + sb, label: 'Armadura de Sombras (13 + DES' + shieldTxt + ')', armor: null });
     bodyArmors.forEach(id => {
       const a = R.armor[id];
-      const dex = a.cat === 'heavy' ? 0 : a.dexMax == null ? m.dex : Math.min(m.dex, a.dexMax); // armadura pesada ignora Destreza
+      const dexMax = a.cat === 'medium' && X.medMaster ? 3 : a.dexMax;
+      const dex = a.cat === 'heavy' ? 0 : dexMax == null ? m.dex : Math.min(m.dex, dexMax); // armadura pesada ignora Destreza
       let v = a.base + dex + sb;
-      let label = a.name + shieldTxt;
-      if (c.choices.fightingStyle === 'defense' && c.classId === 'fighter') { v += 1; label += ' + estilo Defesa'; }
+      let label = a.name + shieldTxt + (a.cat === 'medium' && X.medMaster && m.dex > 2 ? ' (Maestria em Armadura Média)' : '');
+      if (styles.has('defense')) { v += 1; label += ' + estilo Defesa'; }
       acOptions.push({ v, label, armor: id, proficient: p.armor.has(a.cat) });
     });
     const best = acOptions.reduce((a, b) => (b.v > a.v ? b : a));
@@ -279,6 +304,7 @@ CF.engine = (function () {
     if (wornArmor && wornArmor.str && s.str < wornArmor.str && c.raceId !== 'dwarf') { speed -= 3; speedNote = 'Força abaixo de ' + wornArmor.str + ' para ' + wornArmor.name + ': −3 m'; }
     if (c.classId === 'monk' && level >= 2 && !wornArmor && !hasShield) speed += level >= 10 ? 6 : level >= 6 ? 4.5 : 3;
     if (c.classId === 'barbarian' && level >= 5 && !(wornArmor && wornArmor.cat === 'heavy')) speed += 3;
+    speed += X.speed;
     // Versatilidade (Bardo) e Atleta Notável (Campeão)
     const jack = c.classId === 'bard' && level >= 2 ? Math.floor(PB / 2) : 0;
     const athlete = c.classId === 'fighter' && c.choices.subclass === 'champion' && level >= 7 ? Math.ceil(PB / 2) : 0;
@@ -292,7 +318,7 @@ CF.engine = (function () {
       return { id: sk.id, name: sk.name, ab: sk.ab, prof, exp, src: p.skills.get(sk.id) || '', bonus: m[sk.ab] + (prof ? PB * (exp ? 2 : 1) : looseBonus(sk.ab)) };
     });
     const saves = AB.map(k => {
-      const prof = sh.saveProf[k] ?? !!(cls && cls.saves.includes(k));
+      const prof = sh.saveProf[k] ?? !!((cls && cls.saves.includes(k)) || X.saves.includes(k));
       return { id: k, prof, bonus: m[k] + (prof ? PB : 0) + auraSave };
     });
     const perception = skills.find(x => x.id === 'perception').bonus;
@@ -309,13 +335,19 @@ CF.engine = (function () {
       let ab = w.type === 'ranged' && !finesse ? 'dex' : 'str';
       if (finesse || monkWeapon) ab = m.dex > m.str ? 'dex' : 'str';
       const prof = weaponProficient(id, p);
+      const hex = X.hexWarrior && prof && !w.props.includes('duas mãos') && m.cha > m[ab];
+      if (hex) ab = 'cha';
       let atk = m[ab] + (prof ? PB : 0);
-      if (c.choices.fightingStyle === 'archery' && w.type === 'ranged') atk += 2;
+      if (styles.has('archery') && w.type === 'ranged') atk += 2;
       let dmgBonus = m[ab];
       const notes = [];
+      if (hex) notes.push('usa Carisma (Guerreiro Maldito, se for a arma vinculada)');
       let dieTxt = w.dmg;
       if (monkWeapon) { const ma = level >= 11 ? 8 : level >= 5 ? 6 : 4; const wd = Number((w.dmg.match(/d(\d+)/) || [])[1] || 0); if (ma > wd && /^1d/.test(w.dmg)) dieTxt = '1d' + ma; }
-      if (c.choices.fightingStyle === 'dueling' && w.type === 'melee' && !w.props.includes('duas mãos')) { dmgBonus += 2; notes.push('+2 Duelismo se for a única arma'); }
+      if (styles.has('dueling') && w.type === 'melee' && !w.props.includes('duas mãos')) { dmgBonus += 2; notes.push('+2 Duelismo se for a única arma'); }
+      if (styles.has('gwf') && w.type === 'melee' && (w.props.includes('duas mãos') || w.props.some(x => x.startsWith('versátil')))) notes.push('rola de novo 1 e 2 no dano (Armas Grandes)');
+      if (styles.has('twf') && w.props.includes('leve')) notes.push('soma o atributo no ataque da mão inábil');
+      X.atk.forEach(f => { const t = f(w, { pact: X.hexWarrior }); if (t) notes.push(t); });
       if (c.classId === 'barbarian' && w.type === 'melee' && ab === 'str') notes.push(`+${level >= 9 ? 3 : 2} de dano em Fúria`);
       if (c.classId === 'rogue' && (finesse || w.type === 'ranged')) notes.push(`Ataque Furtivo +${Math.ceil(level / 2)}d6`);
       if (c.choices.subclass === 'champion' && c.classId === 'fighter' && level >= 3) notes.push('crítico com 19–20');
@@ -342,12 +374,13 @@ CF.engine = (function () {
 
     // Magia
     let spellcasting = null;
-    if (cls && (cls.casting || (level >= 2 && (c.classId === 'paladin' || c.classId === 'ranger')))) {
-      const k = cls.casting || { ability: c.classId === 'paladin' ? 'cha' : 'wis', cantrips: 0, slots: [], type: 'prepared' };
+    const third = isThird(c.classId, c.choices.subclass) && level >= 3;
+    if (cls && (cls.casting || third || (level >= 2 && (c.classId === 'paladin' || c.classId === 'ranger')))) {
+      const k = cls.casting || (third ? { ability: 'int', cantrips: c.classId === 'rogue' ? (level >= 10 ? 4 : 3) : (level >= 10 ? 3 : 2), known: [0, 0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8][level], slots: [], type: 'known' } : { ability: c.classId === 'paladin' ? 'cha' : 'wis', cantrips: 0, slots: [], type: 'prepared' });
       const am = m[k.ability];
       spellcasting = {
         ability: k.ability, mod: am, dc: num(ov.spellDc) ?? 8 + PB + am, attack: num(ov.spellAtk) ?? PB + am,
-        dcComputed: 8 + PB + am, attackComputed: PB + am, slotsByLevel: slotsFor(c.classId, level),
+        dcComputed: 8 + PB + am, attackComputed: PB + am, slotsByLevel: slotsFor(c.classId, level, c.choices.subclass),
         cantrips: k.cantrips, known: k.known || 0, spellbook: k.spellbook || 0,
         prepared: (k.type === 'prepared' || k.type === 'spellbook') ? Math.max(1, am + 1) : 0,
         slots: k.slots, type: k.type, pact: !!k.pact,
@@ -362,7 +395,8 @@ CF.engine = (function () {
     // Características
     const features = [];
     if (cls) cls.features.filter(f => !f.sub || f.sub === c.choices.subclass).forEach(f => features.push({ ...f, src: cls.name }));
-    if (path && path.option && path.pickLevel === 1 && !path.option.srd) {
+    const autoSub = path && path.option && CF.PROG && CF.PROG.automated(c.classId, path.option.id);
+    if (path && path.option && path.pickLevel === 1 && !path.option.srd && !autoSub) {
       const srcName = CF.PATHS.sources[path.option.src].name;
       features.push({ name: path.option.name, desc: `Habilidades de 1º nível deste caminho: veja ${srcName}, p. ${path.option.page}, e anote aqui com o mestre (não são calculadas automaticamente).`, src: cls.name });
     }
@@ -383,19 +417,22 @@ CF.engine = (function () {
       const d = R.dragons.find(x => x.id === c.choices.dragon);
       if (d) features.push({ name: 'Sopro de dragão ' + d.name, desc: d.area + ', 2d6 de ' + d.dmg + ', resistência de ' + abName(d.save) + ' CD ' + (8 + m.con + PB) + '. Resistência a ' + d.dmg + '.', src: race.name });
     }
-    if (race && race.feat) features.push({ name: 'Talento: ' + ((c.choices.feat || '').trim() || '(a escolher)'), desc: 'Anote o efeito do talento (Livro do Jogador, capítulo de talentos).', src: race.name });
+    const featPicked = CF.PROG && CF.PROG.chosenFeats(c, level).some(f => f.def.type === 'feat');
+    if (race && race.feat && !featPicked) features.push({ name: 'Talento: ' + ((c.choices.feat || '').trim() || '(a escolher)'), desc: 'Escolha o talento na etapa Espécie ou no quadro de escolhas da ficha.', src: race.name });
     // Progressão de classe (nível 2+), aumentos de atributo e caminhos
     const FT = CF.FEATURES;
     if (cls && FT) {
       const ctx = { L: level, m, PB };
       (FT.classes[c.classId] || []).filter(f => f.lvl <= level).forEach(f => features.push({ name: f.name, desc: f.desc(ctx), src: cls.name + ' ' + f.lvl, lvl: f.lvl }));
-      ((CF.PATHS && CF.PATHS.asi[c.classId]) || (CF.PATHS ? CF.PATHS.asi.default : [])).filter(l => l <= level).forEach(l => features.push({ name: 'Aumento no Valor de Atributo', desc: 'Some +2 em um atributo ou +1 em dois (máximo 20) — ou escolha um talento, se o mestre permitir. Ajuste os atributos na ficha.', src: cls.name + ' ' + l, lvl: l }));
+      const asiDone = new Set(X.features.filter(f => f.asi || (f.feat && f.src.startsWith(cls.name))).map(f => f.lvl));
+      ((CF.PATHS && CF.PATHS.asi[c.classId]) || (CF.PATHS ? CF.PATHS.asi.default : [])).filter(l => l <= level && !asiDone.has(l)).forEach(l => features.push({ name: 'Aumento no Valor de Habilidade (a escolher)', desc: 'Escolha +2 em um atributo, +1 em dois ou um talento no quadro “Evolução: escolhas por nível”.', src: cls.name + ' ' + l, lvl: l, todo: true }));
       if (path && path.option && level >= path.pickLevel) {
         const subF = FT.subclasses[path.option.id];
         if (subF && path.option.srd) subF.filter(f => f.lvl <= level).forEach(f => features.push({ name: f.name, desc: f.desc(ctx), src: path.option.name + ' ' + f.lvl, lvl: f.lvl }));
-        else if (!path.option.srd) path.data.featureLevels.filter(l => l <= level && !(l === 1 && path.pickLevel === 1)).forEach(l => features.push({ name: path.option.name + ' — habilidade de nível ' + l, desc: `Consulte ${CF.PATHS.sources[path.option.src].name}, p. ${path.option.page}, e anote o efeito no quadro de habilidades.`, src: path.option.name + ' ' + l, lvl: l, book: true }));
+        else if (!path.option.srd && !autoSub) path.data.featureLevels.filter(l => l <= level && !(l === 1 && path.pickLevel === 1)).forEach(l => features.push({ name: path.option.name + ' — habilidade de nível ' + l, desc: `Consulte ${CF.PATHS.sources[path.option.src].name}, p. ${path.option.page}, e anote o efeito no quadro de habilidades.`, src: path.option.name + ' ' + l, lvl: l, book: true }));
       }
     }
+    X.features.forEach(f => features.push(f));
     if (bg) features.push({ ...bg.feature, src: bg.name });
 
     // Recursos com contagem
@@ -413,12 +450,14 @@ CF.engine = (function () {
     if (c.raceId === 'dragonborn') res('breath', 'Arma de Sopro', 1, 'descanso curto');
     if (c.raceId === 'halforc') res('relentless', 'Resistência Implacável', 1, 'descanso longo');
     if (race && race.raceSpells) race.raceSpells.filter(x => level >= x.level).forEach((x, i) => res('racespell' + i, x.name + ' (' + race.name + ')', 1, x.per));
+    X.res.forEach(r => res(r.key, r.name, Math.max(0, r.uses), r.per));
     (sh.customRes || []).forEach((r, i) => { if (r && (r.name || '').trim()) res('custom' + i, r.name, Math.max(0, Number(r.max) || 0), r.per || 'descanso longo'); });
 
     return {
       ready, path, scores: s, rawScores: scores, mods: m, prof: PB, hp, hitDie: cls ? 'd' + cls.hitDie : '—',
       ac: num(ov.ac) ?? best.v, acLabel: num(ov.ac) != null ? 'Ajustada manualmente' : best.label, acOptions, wornArmor, speed: num(ov.speed) ?? speed, speedNote,
-      initiative: num(ov.init) ?? m.dex + Math.max(jack, athlete), attacksPerAction: (['barbarian', 'monk', 'paladin', 'ranger'].includes(c.classId) && level >= 5) ? 2 : c.classId === 'fighter' ? (level >= 11 ? 3 : level >= 5 ? 2 : 1) : 1, passivePerception: num(ov.passive) ?? 10 + perception, passiveComputed: 10 + perception,
+      initiative: num(ov.init) ?? m.dex + Math.max(jack, athlete) + X.init, attacksPerAction: Math.max(X.attacks || 1, (['barbarian', 'monk', 'paladin', 'ranger'].includes(c.classId) && level >= 5) ? 2 : c.classId === 'fighter' ? (level >= 11 ? 3 : level >= 5 ? 2 : 1) : 1), passivePerception: num(ov.passive) ?? 10 + perception + X.passive, passiveComputed: 10 + perception + X.passive,
+      styles: [...styles], pendingPicks: CF.PROG && cls ? CF.PROG.pending(c, level) : [],
       skills, saves, attacks, spellcasting, raceCantrips, features, resources,
       profs: p, items, itemList: (() => {
         const left = items.slice();
@@ -428,7 +467,7 @@ CF.engine = (function () {
         return list;
       })(),
       level, profComputed, hpSuggested, computedScores, ov, sheet: sh,
-      acComputed: best.v, initComputed: m.dex + Math.max(jack, athlete), speedComputed: speed, hitDiceTotal: level,
+      acComputed: best.v, initComputed: m.dex + Math.max(jack, athlete) + X.init, speedComputed: speed, hitDiceTotal: level,
       armorProfText: [...p.armor].map(a => ({ light: 'leves', medium: 'médias', heavy: 'pesadas', shield: 'escudos' }[a])).join(', ') || 'nenhuma',
       weaponProfText: [...p.weapons].map(w => w === 'simple' ? 'armas simples' : w === 'martial' ? 'armas marciais' : (R.weapons[w] || {}).name || w).join(', ')
     };
@@ -455,7 +494,8 @@ CF.engine = (function () {
     if (!cls) err(1, 'Escolha uma classe.');
     const path = pathInfo(c);
     if (path && path.pickLevel === 1 && !path.option) err(1, `O ${cls.name} escolhe ${path.term.toLowerCase()} já no 1º nível: escolha um caminho.`);
-    if (path && path.pickLevel === 1 && path.option && !path.option.srd) warn(1, `${path.option.name}: as habilidades de 1º nível deste caminho não são calculadas automaticamente. Anote-as do livro (p. ${path.option.page}) com o mestre.`);
+    if (path && path.pickLevel === 1 && path.option && !path.option.srd && !(CF.PROG && CF.PROG.automated(c.classId, path.option.id))) warn(1, `${path.option.name}: as habilidades de 1º nível deste caminho não são calculadas automaticamente. Anote-as do livro (p. ${path.option.page}) com o mestre.`);
+    if (CF.PROG && cls) CF.PROG.pending(c, 1).filter(d => d.src === 'sub').forEach(d => err(1, `${path && path.option ? path.option.name : 'Caminho'}: ${d.label.toLowerCase()} — escolha logo abaixo dos caminhos.`));
     if (!race) err(2, 'Escolha uma espécie.');
     if (!bg) err(3, 'Escolha um antecedente.');
 
@@ -481,7 +521,10 @@ CF.engine = (function () {
     }
     if (race && race.toolChoice && !ch.raceTool) err(2, 'Escolha sua ferramenta de anão.');
     if (race && race.dragonAncestry && !ch.dragon) err(2, 'Escolha sua ancestralidade dracônica.');
-    if (race && race.feat && !(ch.feat || '').trim()) err(2, 'Escreva o talento escolhido (combine com o mestre).');
+    if (race && race.feat && CF.PROG) {
+      const fd = CF.PROG.defs(c, 1).find(d => d.key === 'racefeat');
+      if (fd && !CF.PROG.isComplete(c, fd)) err(2, 'Escolha o talento do ' + race.name + ' (e as opções dele, se houver).');
+    }
     if (race && race.cantrip === 'wizard' && !ch.elfCantrip) err(5, 'Escolha o truque de mago do Alto Elfo.');
 
     // Idiomas

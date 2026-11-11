@@ -215,7 +215,7 @@
       if (it.k === 'sub') { name = sub ? `${sub.name} (nível ${r.lv})` : `Habilidade do caminho (nível ${r.lv})`; src = 'Caminho'; }
       if (!names.has(name.toLowerCase())) sugg.push({ lv: r.lv, name, src });
     }));
-    const autoCards = d.features.slice().sort((a, b) => (b.lvl || 0) - (a.lvl || 0)).map(f => `<div class="ab-card auto ${f.book ? 'book' : ''} ${f.lvl === d.level ? 'new' : ''}"><div class="ab-h"><b>${esc(f.name)}</b><span class="src-chip">${esc(f.src)}</span></div>${f.desc ? `<p>${esc(f.desc)}</p>` : ''}</div>`).join('');
+    const autoCards = d.features.slice().sort((a, b) => (b.lvl || 0) - (a.lvl || 0)).map(f => `<div class="ab-card auto ${f.book ? 'book' : ''} ${f.todo ? 'todo' : ''} ${f.pick ? 'picked' : ''} ${f.lvl === d.level ? 'new' : ''}"><div class="ab-h"><b>${esc(f.name)}</b><span class="src-chip">${esc(f.src)}</span></div>${f.desc ? `<p>${esc(f.desc)}</p>` : ''}</div>`).join('');
     const mine = sh.abilities.map((a, i) => {
       const max = Math.max(0, Math.min(20, parseInt(a.max, 10) || 0));
       return `<div class="ab-card mine">
@@ -243,6 +243,195 @@
         <div class="ab-grid">${autoCards}</div>
       </div>
     </section>`;
+  }
+
+  /* ------------------------------------------------ Evolução: escolhas por nível (modelo BG3) */
+  const PG = () => CF.PROG;
+  const picksObj = c => { c.sheet = c.sheet || E.defaultSheet(); c.sheet.picks = c.sheet.picks || {}; return c.sheet.picks; };
+  const asArr = v => (Array.isArray(v) ? v.filter(x => x != null && x !== '') : []);
+  const txt = (it, ctx) => (typeof it.desc === 'function' ? it.desc(ctx) : it.desc || '');
+
+  /** Itens já escolhidos em outras escolhas do mesmo tipo (para não repetir). */
+  function takenElsewhere(c, def, L) {
+    const pk = picksObj(c);
+    const out = new Set();
+    PG().defs(c, 12).forEach(d => { if (d.key !== def.key && d.type === def.type && (d.pool || '') === (def.pool || '')) asArr(pk[d.key]).forEach(x => out.add(x)); });
+    if (def.pool === 'style' && R.classes[c.classId] && R.classes[c.classId].fightingStyle && c.choices.fightingStyle) out.add(c.choices.fightingStyle);
+    return out;
+  }
+  /** Opções disponíveis de uma escolha, com motivo quando bloqueada. */
+  function optionsFor(c, def, d) {
+    const L = d.level;
+    if (def.type === 'pool') {
+      const pact = asArr(picksObj(c).pact3)[0];
+      return PG().poolItems(def.pool).filter(it => !def.allow || def.allow.includes(it.id)).map(it => {
+        let why = '';
+        if (it.min && L < it.min) why = `nível ${it.min}`;
+        else if (it.pact && pact !== it.pact) why = { blade: 'Pacto da Lâmina', chain: 'Pacto da Corrente', tome: 'Pacto do Tomo' }[it.pact];
+        return { id: it.id, name: it.name, desc: it.desc ? txt(it, ctxFor(c, d)) : it.st ? `CA ${it.st.ac}, PV ${it.st.hp}, ${it.st.spd}; ${it.st.dmg}` : (it.spells ? 'Magias: ' + Object.values(it.spells).map(x => x.join(', ')).join('; ') : ''), why, note: it.eb ? 'requer o truque Rajada Mística' : '' };
+      });
+    }
+    if (def.type === 'skill') {
+      const ids = def.from || R.skills.map(s => s.id);
+      return ids.map(id => {
+        const s = d.skills.find(x => x.id === id);
+        let why = '';
+        if (def.mode === 'exp' && !(s && s.prof)) why = 'precisa ser treinada';
+        return { id, name: E.skillName(id), desc: (R.skills.find(x => x.id === id) || {}).desc || '', why, has: s && s.prof };
+      });
+    }
+    if (def.type === 'cantrip') return (CF.SPELL_INDEX || []).filter(e => e.l === 0 && e.c.includes(def.cls)).map(e => ({ id: e.n, name: e.n, desc: (CF.SPELL_DESC && CF.SPELL_DESC[e.n] ? CF.SPELL_DESC[e.n].d : e.id && R.spells[e.id] ? R.spells[e.id].desc : '') }));
+    return [];
+  }
+  function ctxFor(c, d) { return { L: d.level, m: d.mods, PB: d.prof, s: d.scores, dc: ab => 8 + d.prof + d.mods[ab], pk: () => [], pkItem: () => null }; }
+
+  function chipsHTML(ui, c, def, d, list, selected, limit, extraAttrs) {
+    const { esc } = ui;
+    const taken = takenElsewhere(c, def, d.level);
+    const full = selected.length >= limit;
+    return `<div class="chips small pk-chips">${list.map(o => {
+      const on = selected.includes(o.id);
+      const block = !on && (o.why || taken.has(o.id) || (def.type === 'skill' && def.mode !== 'exp' && o.has && !on));
+      const reason = o.why || (taken.has(o.id) ? 'já escolhida' : def.type === 'skill' && def.mode !== 'exp' && o.has ? 'já treinada' : '');
+      return `<button class="chip ${on ? 'on' : ''}" data-action="pk-toggle" data-list="${def.key}" data-id="${esc(o.id)}" data-n="${limit}" ${extraAttrs || ''} aria-pressed="${on}" ${block ? 'disabled' : ''} title="${esc((o.desc || '') + (o.note ? ' (' + o.note + ')' : ''))}">${esc(o.name)}${reason ? ` <small>· ${esc(reason)}</small>` : ''}</button>`;
+    }).join('')}</div>`;
+  }
+
+  function featControls(ui, c, def, d, v) {
+    const { esc } = ui;
+    const P2 = PG();
+    const feat = P2.featById(v.feat);
+    const known = d.profs.languages;
+    const groups = [['Talentos que também existem no BG3', P2.FEATS.filter(f => f.bg3)], ['Outros talentos do Livro do Jogador', P2.FEATS.filter(f => !f.bg3)]];
+    const used = new Set(P2.chosenFeats(c, 12).filter(x => x.def.key !== def.key).map(x => x.feat.id));
+    let html = `<select data-pk="${def.key}" data-f="feat" aria-label="Talento"><option value="">— escolha um talento —</option>
+      ${groups.map(([g, list]) => `<optgroup label="${g}">${list.map(f => `<option value="${f.id}" ${v.feat === f.id ? 'selected' : ''} ${used.has(f.id) ? 'disabled' : ''}>${esc(f.name)}${f.req ? ' (pré-requisito: ' + esc(f.req) + ')' : ''}${used.has(f.id) ? ' — já escolhido' : ''}</option>`).join('')}</optgroup>`).join('')}</select>`;
+    if (!feat) return html;
+    const fo = v.fo || {};
+    html += `<p class="small pk-desc">${esc(feat.desc)} <span class="muted">(LdJ p. ${feat.page}${feat.req ? ' · pré-requisito: ' + esc(feat.req) : ''})</span></p>`;
+    if (feat.ab) html += `<label class="field inline"><span>+1 em</span><select data-pk="${def.key}" data-f="fo.ab"><option value="">— atributo —</option>${feat.ab.map(k => `<option value="${k}" ${fo.ab === k ? 'selected' : ''}>${E.abName(k)} (${d.scores[k]})</option>`).join('')}</select></label>`;
+    (feat.opts || []).forEach(o => {
+      const sel = asArr(fo[o.k]);
+      html += `<div class="pk-sub"><span class="small"><b>${esc(o.label)}</b> (${sel.length}/${o.n})</span>`;
+      if (o.type === 'pool') {
+        const list = PG().poolItems(o.pool).map(it => ({ id: it.id, name: it.name, desc: it.desc ? txt(it, ctxFor(c, d)) : '' }));
+        html += `<div class="chips small pk-chips">${list.map(it => { const on = sel.includes(it.id); return `<button class="chip ${on ? 'on' : ''}" data-action="pk-toggle" data-list="${def.key}" data-fo="${o.k}" data-id="${esc(it.id)}" data-n="${o.n}" aria-pressed="${on}" title="${esc(it.desc)}">${esc(it.name)}</button>`; }).join('')}</div>`;
+      } else if (o.type === 'skill') {
+        html += `<div class="chips small pk-chips">${R.skills.map(s => { const on = sel.includes(s.id); const has = !on && d.skills.find(x => x.id === s.id).prof; return `<button class="chip ${on ? 'on' : ''}" data-action="pk-toggle" data-list="${def.key}" data-fo="${o.k}" data-id="${s.id}" data-n="${o.n}" aria-pressed="${on}" ${has ? 'disabled' : ''}>${s.name}${has ? ' <small>· já treinada</small>' : ''}</button>`; }).join('')}</div>`;
+      } else if (o.type === 'lang') {
+        html += `<div class="field-row">${Array.from({ length: o.n }, (_, i) => `<select data-pk="${def.key}" data-f="fo.${o.k}.${i}" aria-label="Idioma ${i + 1}"><option value="">— idioma —</option>${R.languages.filter(l => l === sel[i] || !known.includes(l)).map(l => `<option ${l === sel[i] ? 'selected' : ''}>${l}</option>`).join('')}</select>`).join('')}</div>`;
+      }
+      html += '</div>';
+    });
+    return html;
+  }
+
+  function pickBlock(ui, c, d, def) {
+    const { esc } = ui;
+    const pk = picksObj(c);
+    const v = pk[def.key];
+    const done = PG().isComplete(c, def);
+    let body = '';
+    if (def.type === 'pool' || def.type === 'skill' || def.type === 'cantrip') {
+      const sel = asArr(v);
+      const list = optionsFor(c, def, d);
+      body = `<p class="tiny muted">Escolha ${def.n} (${sel.length}/${def.n})${def.mode === 'exp' ? ' — dobra a proficiência em perícias treinadas' : def.mode === 'profexp' ? ' — ganha proficiência e especialização' : ''}.</p>` + chipsHTML(ui, c, def, d, list, sel, def.n);
+      const chosen = list.filter(o => sel.includes(o.id) && o.desc);
+      if (chosen.length && def.type === 'pool') body += `<ul class="pk-chosen">${chosen.map(o => `<li><b>${esc(o.name)}:</b> ${esc(o.desc)}</li>`).join('')}</ul>`;
+    } else if (def.type === 'lang' || def.type === 'tool') {
+      const sel = Array.isArray(v) ? v : [];
+      const known = d.profs.languages;
+      const list = def.type === 'lang' ? R.languages : (R.toolLists[def.list] || []);
+      body = `<div class="field-row">${Array.from({ length: def.n }, (_, i) => `<select data-pk="${def.key}" data-f="i.${i}" aria-label="${esc(def.label)} ${i + 1}"><option value="">— escolha —</option>${list.filter(x => x === sel[i] || !(def.type === 'lang' ? known.includes(x) : d.profs.tools.includes(x))).map(x => `<option ${x === sel[i] ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`).join('')}</div>`;
+    } else if (def.type === 'asi' || def.type === 'feat') {
+      const val = v || {};
+      const mode = def.type === 'feat' ? 'feat' : (val.mode || 'asi');
+      if (def.type === 'asi') body += `<div class="seg" role="group"><button class="chip ${mode === 'asi' ? 'on' : ''}" data-action="pk-mode" data-list="${def.key}" data-id="asi" aria-pressed="${mode === 'asi'}">+2 em atributos</button><button class="chip ${mode === 'feat' ? 'on' : ''}" data-action="pk-mode" data-list="${def.key}" data-id="feat" aria-pressed="${mode === 'feat'}">Talento</button></div>`;
+      if (mode === 'asi') {
+        const a = Array.isArray(val.a) ? val.a : [];
+        body += `<div class="field-row">${[0, 1].map(i => `<select data-pk="${def.key}" data-f="a.${i}" aria-label="Atributo ${i + 1}"><option value="">— +1 em —</option>${E.AB.map(k => `<option value="${k}" ${a[i] === k ? 'selected' : ''}>${E.abName(k)} (${d.computedScores[k] ?? '—'})</option>`).join('')}</select>`).join('')}</div>
+          <p class="tiny muted">Escolha o mesmo atributo duas vezes para +2. Máximo 20.</p>`;
+      } else body += featControls(ui, c, def, d, val);
+    }
+    return `<div class="pk ${done ? 'done' : 'todo'}" id="pk-${def.key}">
+      <div class="pk-h"><span class="lv">Nv ${def.lvl}</span><b>${esc(def.label)}</b><span class="pk-st">${done ? '✓ feito' : '● pendente'}</span></div>${body}</div>`;
+  }
+
+  /** HTML do quadro de escolhas. opts: { maxLvl, src, keys, title } */
+  function picksHTML(ui, c, d, opts) {
+    if (!PG() || !R.classes[c.classId]) return '';
+    opts = opts || {};
+    const L = opts.maxLvl || d.level;
+    let list = PG().defs(c, L);
+    if (opts.src) list = list.filter(x => x.src === opts.src);
+    if (opts.keys) list = list.filter(x => opts.keys.includes(x.key));
+    if (!list.length) return '';
+    const pend = list.filter(x => !PG().isComplete(c, x)).length;
+    const blocks = list.map(def => pickBlock(ui, c, d, def)).join('');
+    if (opts.bare) return `<div class="pk-list">${blocks}</div>`;
+    // Prévia do próximo nível
+    const next = d.level < P.levelCap ? PG().defs(c, d.level + 1).filter(x => x.lvl === d.level + 1) : [];
+    return `<section class="lcard lc-picks" id="picksPanel"><h3>🧬 Evolução: escolhas por nível ${pend ? `<span class="count warn">${pend} pendente${pend > 1 ? 's' : ''}</span>` : '<span class="count">tudo escolhido ✓</span>'}</h3>
+      <p class="small muted">Como no Baldur's Gate 3: a cada nível, escolha talentos, estilos, manobras, metamagias e afins. A ficha aplica os efeitos sozinha (atributos, CA, perícias, recursos e habilidades).</p>
+      <div class="pk-list">${blocks}</div>
+      ${next.length ? `<p class="tiny muted">No nível ${d.level + 1}: ${next.map(x => ui.esc(x.label)).join(' · ')}.</p>` : ''}
+    </section>`;
+  }
+
+  /** Clique em chips e botões de modo. Devolve true se mudou algo. */
+  function pickAction(ui, c, el) {
+    const pk = picksObj(c);
+    const key = el.dataset.list, id = el.dataset.id;
+    if (el.dataset.action === 'pk-mode') {
+      const v = pk[key] && typeof pk[key] === 'object' && !Array.isArray(pk[key]) ? pk[key] : {};
+      v.mode = id; pk[key] = v; return true;
+    }
+    const n = Number(el.dataset.n) || 1;
+    let holder, field;
+    if (el.dataset.fo) { const v = pk[key] = pk[key] || {}; v.fo = v.fo || {}; holder = v.fo; field = el.dataset.fo; } else { holder = pk; field = key; }
+    const cur = asArr(holder[field]);
+    const i = cur.indexOf(id);
+    if (i >= 0) cur.splice(i, 1);
+    else if (n === 1) cur.splice(0, cur.length, id);
+    else if (cur.length < n) cur.push(id);
+    else { ui.toast(`Você já escolheu ${n}. Desmarque uma opção primeiro.`); return false; }
+    holder[field] = cur;
+    return true;
+  }
+  /** Mudança em selects do quadro de escolhas. */
+  function pickChange(ui, c, el) {
+    const pk = picksObj(c);
+    const key = el.dataset.pk, f = el.dataset.f, val = el.value;
+    if (f.startsWith('i.')) { const a = Array.isArray(pk[key]) ? pk[key] : []; a[Number(f.slice(2))] = val; pk[key] = a; return true; }
+    const v = pk[key] && typeof pk[key] === 'object' && !Array.isArray(pk[key]) ? pk[key] : {};
+    pk[key] = v;
+    if (f === 'feat') { v.feat = val; v.fo = {}; if (key !== 'racefeat') v.mode = 'feat'; return true; }
+    if (f.startsWith('a.')) { v.a = Array.isArray(v.a) ? v.a : []; v.a[Number(f.slice(2))] = val; return true; }
+    if (f.startsWith('fo.')) {
+      v.fo = v.fo || {};
+      const parts = f.split('.');
+      if (parts.length === 2) v.fo[parts[1]] = val;
+      else { const a = Array.isArray(v.fo[parts[1]]) ? v.fo[parts[1]] : []; a[Number(parts[2])] = val; v.fo[parts[1]] = a; }
+      return true;
+    }
+    return false;
+  }
+
+  /** Coloca no quadro as magias concedidas pelo caminho/escolhas que ainda não estão lá (uma vez cada). */
+  function syncAlways(c, d) {
+    const sh = c.sheet;
+    sh.autoSpells = sh.autoSpells || [];
+    let added = 0;
+    E.spellAccess(c, d.level).always.forEach(name => {
+      if (sh.autoSpells.includes(name)) return;
+      sh.autoSpells.push(name);
+      if (sh.spells.some(x => x.name.toLowerCase() === name.toLowerCase())) return;
+      const srd = srdByName(name), ix = idxByName(name);
+      if (!srd && !ix) return;
+      sh.spells.push({ sid: srd ? srd.id : '', name: srd ? srd.name : ix.n, circle: srd ? srd.lvl : ix.l, prep: true, notes: 'Do caminho/escolha (sempre preparada)' });
+      added++;
+    });
+    return added;
   }
 
   function render(ui, id) {
@@ -297,8 +486,11 @@
 
     // Quadros de magias e de habilidades
     if (!sh.spellsInit) { sh.spells = seedSpells(c, d); sh.extraSpells = []; sh.spellsInit = true; if (ui.save) ui.save(); }
+    if (syncAlways(c, d) && ui.save) ui.save();
     const magic = spellPanel(ui, c, d);
     const abilitiesHTML = abilityPanel(ui, c, d);
+    const picksPanel = picksHTML(ui, c, d);
+    const pend = d.pendingPicks.length;
 
     const html = `<section class="page live-page">
       <div class="sheet-actions no-print">
@@ -325,7 +517,8 @@
             <label><span>Tendência</span><select data-sel="story.alignment"><option value="">—</option>${R.alignments.map(a => `<option ${c.story.alignment === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
             <label><span>XP</span><input type="number" min="0" data-sv="sheet.xp" value="${sh.xp}"></label>
           </div>
-          ${newHere && d.level > 1 ? `<div class="callout small lnew">🎉 <b>Novidades do nível ${d.level}:</b> ${newHere.items.map(i => esc(i.t)).join(' · ')}. <span class="muted">Anote as habilidades novas em “Habilidades e características”.</span></div>` : ''}
+          ${newHere && d.level > 1 ? `<div class="callout small lnew">🎉 <b>Novidades do nível ${d.level}:</b> ${newHere.items.map(i => esc(i.t)).join(' · ')}. <span class="muted">As habilidades novas já aparecem em “Habilidades e características”.</span></div>` : ''}
+          ${pend ? `<div class="callout small lnew warn no-print">🧬 Você tem <b>${pend} escolha${pend > 1 ? 's' : ''} de evolução</b> pendente${pend > 1 ? 's' : ''} (${d.pendingPicks.map(x => 'nv ' + x.lvl + ': ' + esc(x.label)).join(' · ')}). <button class="btn sm" data-action="goto-picks">Fazer agora ↓</button></div>` : ''}
         </header>
 
         <section class="lcard lc-combat">
@@ -374,6 +567,8 @@
             <button class="mini danger" data-action="row-del" data-list="customAttacks" data-id="${i}" aria-label="Remover ataque">✕</button></div>`).join('')}</div>
           <button class="btn sm" data-action="row-add" data-list="customAttacks">+ Ataque</button>
         </section>
+
+        ${picksPanel}
 
         ${magic}
 
@@ -507,9 +702,10 @@
       case 'rm-item': sh.removedItems.push(id); return true;
       case 'restore-items': sh.removedItems = []; return true;
       case 'print-live': document.getElementById('printSheet').innerHTML = ui.sheetHTML(c); window.print(); return false;
+      case 'goto-picks': { const p = document.querySelector('.pk.todo') || document.getElementById('picksPanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'center' }); return false; }
     }
     return null; // não é uma ação da ficha
   }
 
-  CF.sheetTab = { render, action, ensureSheet, seedSpells };
+  CF.sheetTab = { render, action, ensureSheet, seedSpells, picksHTML, pickAction, pickChange, syncAlways };
 })();

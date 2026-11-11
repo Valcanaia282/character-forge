@@ -244,14 +244,15 @@
       <p class="example"><strong>Exemplo de turno:</strong> ${cls.exampleTurn}</p>
       <details><summary>Habilidades de 1º nível</summary><ul class="feat-list">${cls.features.filter(f => !f.sub || f.sub === c.choices.subclass).map(f => `<li><strong>${f.name}.</strong> ${f.desc}</li>`).join('')}</ul></details>
     </article>
-    ${pathSection(c.classId, c.choices.subclass, true)}` : ''}`;
+    ${pathSection(c.classId, c.choices.subclass, true)}
+    ${CF.sheetTab && P.classes[c.classId] && P.classes[c.classId].pickLevel === 1 && c.choices.subclass ? (h => (h ? `<section class="paths"><h3>Escolhas de 1º nível do caminho</h3>${h}</section>` : ''))(CF.sheetTab.picksHTML(CF.ui, c, E.derive(c), { maxLvl: 1, src: 'sub', bare: true })) : ''}` : ''}`;
   }
 
   /* --------------------------------------------------------------- Caminhos */
   const srcBadge = o => `<span class="src src-${o.src}" title="${esc(P.sources[o.src].name)}">${P.sources[o.src].short} p. ${o.page}</span>`;
   function pathCard(o, on, action) {
     return `<button class="card path ${on ? 'selected' : ''}" data-action="${action}" data-id="${o.id}" aria-pressed="${on}">
-      <span class="path-badges">${srcBadge(o)}${o.beginner ? '<span class="badge">bom para iniciantes</span>' : ''}${o.srd ? '<span class="badge calc">calculado na ficha</span>' : ''}</span>
+      <span class="path-badges">${srcBadge(o)}${o.beginner ? '<span class="badge">bom para iniciantes</span>' : ''}${o.srd || o.auto ? '<span class="badge calc">⚙️ automático na ficha</span>' : ''}${o.bg3 ? '<span class="badge bg3" title="Também existe no Baldur\'s Gate 3: trilha com escolhas por nível">🎮 BG3</span>' : ''}</span>
       <strong>${esc(o.name)}</strong><span>${esc(o.pitch)}</span>
       <span class="path-rumo"><b>Até o nível 12:</b> ${esc(o.rumo)}</span>
       <span class="card-meta">${o.roles.map(r => P.roleNames[r]).join(' · ')}</span></button>`;
@@ -268,13 +269,13 @@
     const intro = pc.pickLevel === 1
       ? `O ${cls.name} escolhe o ${term} <strong>já no 1º nível</strong>${inCreator ? ' — escolha agora:' : '.'}`
       : `O ${cls.name} escolhe o ${term} no <strong>${pc.pickLevel}º nível</strong>.${inCreator ? ' Você já pode marcar o caminho que pretende seguir: ele aparece na ficha como <em>planejado</em>, e o mestre fica sabendo para onde o personagem vai.' : ''}`;
-    const sorted = pc.options.slice().sort((a, b) => (b.srd ? 1 : 0) - (a.srd ? 1 : 0) || (a.src === b.src ? 0 : a.src === 'ldj' ? -1 : 1));
+    const sorted = pc.options.slice().sort((a, b) => ((b.srd || b.auto) ? 1 : 0) - ((a.srd || a.auto) ? 1 : 0) || (a.src === b.src ? 0 : a.src === 'ldj' ? -1 : 1));
     return `<section class="paths">
       <h3>🗺️ Caminhos do ${cls.name}: ${pc.term}</h3>
       <p>${intro} As habilidades do caminho chegam nos níveis <strong>${pc.featureLevels.join(', ')}</strong> (campanha até o nível ${P.levelCap}).</p>
       ${pc.note ? `<div class="callout small">${esc(pc.note)}</div>` : ''}
       <div class="cards cards-3">${sorted.map(o => pathCard(o, o.id === subId, inCreator ? 'set-subclass' : 'trail-sub')).join('')}</div>
-      <p class="muted small">Resumos próprios para ajudar na escolha. As regras completas estão no livro e na página indicados (LdJ = Livro do Jogador; Xanathar = Guia de Xanathar para Todas as Coisas).</p>
+      <p class="muted small">Resumos próprios para ajudar na escolha. As regras completas estão no livro e na página indicados (LdJ = Livro do Jogador; Xanathar = Guia de Xanathar para Todas as Coisas). Caminhos com ⚙️ têm a trilha automática na ficha (no modelo do Baldur's Gate 3: você faz as escolhas de cada nível e a ficha aplica os efeitos); nos demais, a ficha indica a página do livro.</p>
       <details class="track-wrap" ${sub || !inCreator ? 'open' : ''}><summary>Sua trilha do nível 1 ao ${P.levelCap}${sub ? ' — ' + esc(sub.name) : ''}</summary>${trackHTML(classId, subId)}</details>
     </section>`;
   }
@@ -340,8 +341,8 @@
         }).join('')}</div>`);
       }
       if (race.feat) {
-        parts.push(`<label class="field"><span>Talento escolhido (veja o capítulo de talentos do Livro do Jogador)</span><input type="text" data-bind="choices.feat" value="${esc(c.choices.feat || '')}" maxlength="60" placeholder="Ex.: Sortudo, Observador, Conjurador de Guerra…"></label>
-        <p class="muted small">O efeito do talento você anota na aba Ficha, no quadro de habilidades.</p>`);
+        parts.push(`<h4>Talento</h4>${CF.sheetTab ? CF.sheetTab.picksHTML(CF.ui, c, E.derive(c), { maxLvl: 1, keys: ['racefeat'], bare: true }) : ''}
+        <p class="muted small">Os efeitos do talento (atributo, perícias, iniciativa, PV…) já entram na ficha. Você pode trocar depois na aba Ficha.</p>`);
       }
       if (race.toolChoice) {
         parts.push(`<label class="field"><span>Ferramenta de anão</span><select data-bind="choices.raceTool" data-rerender="1"><option value="">— escolha —</option>${race.toolChoice.map(t => `<option ${c.choices.raceTool === t ? 'selected' : ''}>${t}</option>`).join('')}</select></label>`);
@@ -568,7 +569,7 @@
 
     // Habilidades da classe
     const pth = d.path;
-    if (pth && pth.option) out.push(`<div class="callout small">🗺️ ${pth.pickLevel === 1 ? 'Caminho' : 'Caminho planejado'}: <strong>${esc(pth.option.name)}</strong> ${srcBadge(pth.option)}${pth.pickLevel > 1 ? ` — escolhido de fato no ${pth.pickLevel}º nível.` : (pth.option.srd ? ' — já calculado na ficha.' : ' — anote as habilidades de 1º nível do livro com o mestre.')}</div>`);
+    if (pth && pth.option) out.push(`<div class="callout small">🗺️ ${pth.pickLevel === 1 ? 'Caminho' : 'Caminho planejado'}: <strong>${esc(pth.option.name)}</strong> ${srcBadge(pth.option)}${pth.pickLevel > 1 ? ` — escolhido de fato no ${pth.pickLevel}º nível.` : (pth.option.srd || pth.option.auto ? ' — já calculado na ficha.' : ' — anote as habilidades de 1º nível do livro com o mestre.')}</div>`);
     out.push(`<section><h3>O que seu ${cls.name} sabe fazer</h3><ul class="feat-list">${cls.features.filter(f => !f.sub || f.sub === c.choices.subclass).map(f => `<li><strong>${f.name}.</strong> ${f.desc}</li>`).join('')}</ul></section>`);
 
     // Magias
@@ -1149,6 +1150,11 @@
       if (r === false) return;
     }
     const done = () => { touch(); rerender(focusKey); };
+    if ((act === 'pk-toggle' || act === 'pk-mode') && c && CF.sheetTab) {
+      const fk = focusKey + (el.dataset.fo ? `[data-fo="${el.dataset.fo}"]` : '');
+      if (CF.sheetTab.pickAction(CF.ui, c, el)) { touch(); if (route()[0] === 'ficha') rerenderLive(fk); else rerender(fk); }
+      return;
+    }
     const showDetail = () => { const d = document.querySelector('.panel .detail'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
 
     switch (act) {
@@ -1313,6 +1319,14 @@
   document.addEventListener('change', e => {
     const el = e.target;
     const c = cur();
+    if (el.dataset.pk && c && CF.sheetTab) {
+      if (CF.sheetTab.pickChange(CF.ui, c, el)) {
+        touch();
+        const fk = `[data-pk="${el.dataset.pk}"][data-f="${el.dataset.f}"]`;
+        if (route()[0] === 'ficha') rerenderLive(fk); else rerender(fk);
+      }
+      return;
+    }
     if (route()[0] === 'ficha' && c) {
       if (el.id === 'sheetSwitch' && el.value) { go('ficha/' + el.value); return; }
       if (el.dataset.sv) {
