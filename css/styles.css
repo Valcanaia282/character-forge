@@ -356,7 +356,22 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
 .sp-notes { font-size: .9rem !important; padding: 5px 8px !important; }
 .sp-add { margin-top: 16px; padding-top: 10px; border-top: 1px dashed var(--line); display: grid; gap: 8px; }
 .sp-add h4 { margin: 0; }
-.sp-add .row select#spAddSel { flex: 2 1 240px; }
+.sp-access { margin: 0; }
+.sp-filter { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.sp-filter label { display: grid; gap: 2px; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.sp-filter label.grow { flex: 1 1 200px; }
+.sp-filter label.chk { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-size: .9rem; color: var(--ink-2); }
+.sp-filter select { width: auto; min-width: 190px; }
+#spPick { max-height: 420px; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: 10px; padding: 6px 10px; background: rgba(0, 0, 0, .15); }
+.sp-pick-list { list-style: none; padding: 0; margin: 0; }
+.sp-pick-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px dotted var(--line-soft); }
+.sp-pick-list li.have { opacity: .6; }
+.sp-pick-info { display: grid; gap: 2px; min-width: 0; }
+.sp-pick-info small { color: var(--muted); }
+.sp-mini { font-size: .85rem; color: var(--ink-2); }
+.have-tag { font-size: .8rem; color: #b5ecbd; white-space: nowrap; }
+.sp-free summary { font-size: .9rem; }
+.sp-free .row { margin-top: 8px; }
 .ab-card.auto { background: var(--panel-2); }
 .ab-card.auto p { margin: 0; font-size: .9rem; color: var(--ink-2); }
 .ab-card.mine { border-color: rgba(212, 166, 74, .55); }
