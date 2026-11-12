@@ -501,6 +501,7 @@
         <button class="btn" data-action="open-char" data-id="${c.id}">🧭 Refazer escolhas no assistente</button>
         <span class="muted small" id="saveStatus">Salvo automaticamente ✓</span>
       </div>
+      ${ui.liveBar ? ui.liveBar(c) : ''}
       ${errs ? `<div class="callout error small">A criação ainda tem ${errs} pendência(s). Você pode jogar assim mesmo, ou <button class="btn sm" data-action="open-char" data-id="${c.id}">resolver no assistente</button>.</div>` : ''}
       <p class="muted small no-print">Tudo aqui é editável. Números com borda dourada foram <b>ajustados à mão</b>; clique em “auto ↺” para voltar ao cálculo automático.</p>
 

@@ -66,6 +66,8 @@
     const ok = store('cf.chars', chars) && store('cf.current', currentId);
     const s = document.getElementById('saveStatus');
     if (s) s.textContent = ok ? 'Salvo automaticamente ✓' : 'Não foi possível salvar neste navegador';
+    const c = cur();
+    if (c && CF.live && Array.isArray(c.live) && c.live.length) CF.live.schedule(c);
   }
   function touch() { const c = cur(); if (c) c.updatedAt = Date.now(); saveChars(); }
   function newChar(preset) {
@@ -75,6 +77,203 @@
     return c;
   }
   function saveParty() { store('cf.party', party); }
+
+  /* ============================================================ Mesa ao vivo */
+  const L = CF.live;
+  const liveState = {}; // por personagem: 'sending' | 'sent' | 'error'
+  let liveErrShown = false;
+  const hhmm = t => new Date(t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  function ago(t) {
+    const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return 'agora mesmo';
+    if (s < 3600) return 'há ' + Math.round(s / 60) + ' min';
+    if (s < 86400) return 'às ' + hhmm(t);
+    return 'em ' + new Date(t).toLocaleDateString('pt-BR');
+  }
+  function liveStatusText(c) {
+    const st = liveState[c.id];
+    const sent = Math.max(0, ...(c.live || []).map(l => l.sentAt || 0));
+    if (st === 'sending') return 'enviando…';
+    if (st === 'error') return '⚠️ sem conexão — será enviado na próxima alteração';
+    return sent ? 'última atualização enviada ' + ago(sent) : 'as alterações são enviadas automaticamente';
+  }
+  if (L) {
+    L.onStatus((c, state, err) => {
+      liveState[c.id] = state;
+      if (state === 'sent') { store('cf.chars', chars); liveErrShown = false; }
+      if (state === 'error') {
+        console.warn('Mesa ao vivo:', err);
+        if (!liveErrShown) { liveErrShown = true; toast('Não foi possível enviar a ficha para a mesa agora. Ela será enviada na próxima alteração.'); }
+      }
+      const el = document.querySelector(`[data-live-status="${c.id}"]`);
+      if (el) el.textContent = liveStatusText(c);
+    });
+    L.retry = () => Object.values(chars).forEach(c => L.schedule(c, 0));
+    // Ao abrir o site, reenvia as fichas conectadas (caso algo tenha sido editado sem internet).
+    setTimeout(() => { if (Object.values(chars).some(c => (c.live || []).length)) L.retry(); }, 2500);
+  }
+  function pendingInvite() { return load('cf.invite', null); }
+
+  function liveBar(c) {
+    if (!L || !c) return '';
+    const links = c.live || [];
+    const inv = pendingInvite();
+    const invOpen = inv && !links.some(l => l.mesa === inv.id);
+    let html = '';
+    if (links.length) {
+      html += `<div class="live-bar on no-print"><span class="live-dot" aria-hidden="true"></span>
+        <span>📡 Ao vivo na mesa ${links.map(l => `<b>${esc(l.name || 'do mestre')}</b>`).join(', ')}: <span data-live-status="${c.id}">${liveStatusText(c)}</span></span>
+        ${links.map(l => `<button class="btn sm ghost" data-action="live-disconnect" data-id="${c.id}" data-mesa="${l.mesa}">Desconectar${links.length > 1 ? ' de ' + esc(l.name || '') : ''}</button>`).join('')}</div>`;
+    }
+    if (invOpen) {
+      html += `<div class="live-bar invite no-print">📨 Você foi convidado para a mesa <b>${esc(inv.name || 'do mestre')}</b>.
+        <button class="btn sm primary" data-action="live-connect" data-id="${c.id}" data-mesa="${inv.id}">📡 Conectar ${esc(c.name || 'este personagem')}</button></div>`;
+    } else if (!links.length) {
+      html += `<div class="live-bar no-print"><span>📡 Quer que o mestre veja esta ficha sempre atualizada?</span>
+        <button class="btn sm" data-action="live-connect" data-id="${c.id}">Conectar à mesa do mestre</button></div>`;
+    }
+    return html;
+  }
+
+  async function liveConnect(c, mesaId) {
+    if (!mesaId) {
+      const txt = prompt('Cole o link de convite que o mestre mandou:');
+      if (txt == null) return;
+      mesaId = L.parseInvite(txt);
+      if (!mesaId) { alert('Não reconheci esse link. Peça ao mestre o “link de convite” da aba Grupo.'); return; }
+    }
+    toast('Conectando à mesa…');
+    try {
+      const mesa = await L.getMesa(mesaId);
+      if (!mesa) { alert('Essa mesa não existe mais. Peça um novo link ao mestre.'); return; }
+      c.live = (c.live || []).filter(l => l.mesa !== mesaId).concat([{ mesa: mesaId, name: mesa.name }]);
+      store('cf.chars', chars);
+      const inv = pendingInvite();
+      if (inv && inv.id === mesaId) localStorage.removeItem('cf.invite');
+      liveState[c.id] = 'sending';
+      await L.flush(c);
+      if (liveState[c.id] === 'error') throw new Error('envio falhou');
+      toast('Conectado! O mestre já vê “' + (c.name || 'seu personagem') + '” na mesa ' + mesa.name + '.');
+    } catch (e) {
+      console.warn(e);
+      alert('Não foi possível conectar agora. Verifique a internet e tente de novo.');
+    }
+    render();
+  }
+  async function liveDisconnect(c, mesaId) {
+    const l = (c.live || []).find(x => x.mesa === mesaId);
+    if (!l || !confirm('Parar de enviar esta ficha para a mesa “' + (l.name || '') + '”? O mestre deixará de ver as atualizações.')) return;
+    c.live = c.live.filter(x => x.mesa !== mesaId);
+    store('cf.chars', chars);
+    if (l.ficha) L.removeFicha(mesaId, l.ficha).catch(e => console.warn(e));
+    toast('Desconectado da mesa.');
+    render();
+  }
+
+  /* Mestre: escuta a mesa e atualiza o grupo */
+  let watching = null, watchOff = null, mesaInfo = { state: 'idle', count: 0, at: 0 };
+  let partyPending = false, partyView = null, renameTimer = null, lastList = [];
+  function startWatch() {
+    if (!L || !party.mesa) return;
+    if (watching === party.mesa.id) return;
+    if (watchOff) watchOff();
+    watching = party.mesa.id;
+    mesaInfo = { state: 'connecting', count: 0, at: 0 };
+    watchOff = L.watch(party.mesa.id, list => applyLive(list), err => {
+      console.warn('Mesa ao vivo:', err);
+      mesaInfo.state = 'error'; watching = null;
+      refreshParty();
+    });
+  }
+  function stopWatch() { if (watchOff) watchOff(); watchOff = null; watching = null; }
+  function applyLive(list) {
+    const hidden = new Set(party.hidden || []);
+    const seen = new Set();
+    lastList = list;
+    list = list.filter(it => !hidden.has(it.ficha));
+    list.forEach(it => {
+      const m = migrate(it.data);
+      m._live = { ficha: it.ficha, at: it.updatedAt };
+      seen.add(it.ficha);
+      const i = party.members.findIndex(x => (x._live && x._live.ficha === it.ficha) || x.id === m.id);
+      if (i >= 0) party.members[i] = m; else party.members.push(m);
+    });
+    party.members.forEach(m => { if (m._live && !seen.has(m._live.ficha)) m._live.off = true; });
+    mesaInfo = { state: 'on', count: seen.size, at: Math.max(0, ...list.map(it => it.updatedAt || 0)) };
+    saveParty();
+    refreshParty();
+  }
+  function refreshParty() {
+    if (route()[0] !== 'grupo') return;
+    const a = document.activeElement;
+    if (a && $app.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) { partyPending = true; return; }
+    const y = window.scrollY;
+    renderParty();
+    window.scrollTo(0, y);
+  }
+  document.addEventListener('focusout', () => { if (partyPending) { partyPending = false; setTimeout(refreshParty, 50); } });
+  setInterval(() => { if (partyPending) { partyPending = false; refreshParty(); } }, 3000); // garantia, caso o foco saia sem evento
+  setInterval(() => { // atualiza os “há X min”
+    if (route()[0] === 'grupo' && party.mesa) document.querySelectorAll('[data-ago]').forEach(el => { el.textContent = ago(Number(el.dataset.ago)); });
+  }, 30000);
+
+  function mesaPanel() {
+    if (!L) return '';
+    if (!party.mesa) return `<div class="mesa-box">
+      <h2>📡 Mesa ao vivo</h2>
+      <p>Crie a mesa e mande o link de convite para os jogadores. Cada um conecta o próprio personagem uma vez e, a partir daí, <strong>toda alteração que fizer na ficha aparece aqui sozinha</strong> — nível, PV, magias, itens, tudo.</p>
+      <button class="btn primary" data-action="mesa-create">📡 Criar mesa ao vivo</button></div>`;
+    const link = L.inviteLink(party.mesa.id);
+    const st = mesaInfo.state === 'on'
+      ? `<span class="live-dot" aria-hidden="true"></span> Conectada · ${mesaInfo.count} ficha(s) ao vivo${mesaInfo.at ? ` · última alteração <span data-ago="${mesaInfo.at}">${ago(mesaInfo.at)}</span>` : ''}`
+      : mesaInfo.state === 'error' ? '⚠️ Sem conexão com a mesa. <button class="btn sm" data-action="mesa-retry">Tentar de novo</button>'
+      : 'Conectando…';
+    return `<div class="mesa-box on">
+      <h2>📡 Mesa ao vivo: ${esc(party.mesa.name || party.name)}</h2>
+      <p class="mesa-st">${st}</p>
+      ${(party.hidden || []).length ? `<p class="muted small">${party.hidden.length} ficha(s) removida(s) do grupo continuam ignoradas. <button class="btn sm ghost" data-action="mesa-unhide">Mostrar de novo</button></p>` : ''}
+      <label class="field"><span>Link de convite (mande no grupo do WhatsApp/Discord)</span>
+        <span class="copy-row"><input type="text" readonly value="${esc(link)}" id="mesaLink" aria-label="Link de convite"><button class="btn primary" data-action="mesa-copy">📋 Copiar convite</button></span></label>
+      <p class="muted small">O jogador abre o link, escolhe o personagem e clica em <b>Conectar</b>. Quem ainda não criou o personagem pode criar depois — o convite fica guardado na ficha dele.</p>
+      <button class="btn sm ghost" data-action="mesa-off">Desligar a mesa neste navegador</button></div>`;
+  }
+
+  /* Convite (jogador abre o link do mestre) */
+  async function renderJoin(mesaId) {
+    $app.innerHTML = `<section class="page narrow"><p class="eyebrow">Mesa ao vivo</p><h1>Abrindo o convite…</h1></section>`;
+    if (!L) { $app.innerHTML = '<section class="page narrow"><h1>Mesa indisponível</h1></section>'; return; }
+    let mesa = null, err = null;
+    try { mesa = await L.getMesa(mesaId); } catch (e) { err = e; console.warn(e); }
+    if (route()[0] !== 'mesa') return;
+    if (err || !mesa) {
+      $app.innerHTML = `<section class="page narrow"><p class="eyebrow">Mesa ao vivo</p><h1>${err ? 'Sem conexão' : 'Convite inválido'}</h1>
+        <p class="callout error">${err ? 'Não foi possível abrir o convite. Verifique a internet e recarregue a página.' : 'Essa mesa não existe mais. Peça um novo link ao mestre.'}</p></section>`;
+      return;
+    }
+    if (mesa.mine) {
+      $app.innerHTML = `<section class="page narrow"><p class="eyebrow">Mesa ao vivo</p><h1>${esc(mesa.name)}</h1>
+        <p class="callout">Este é o link da <b>sua</b> mesa. Mande para os jogadores; as fichas deles aparecem na aba <a href="#/grupo">Grupo</a>.</p></section>`;
+      return;
+    }
+    const list = Object.values(chars).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    // Guarda o convite para aparecer na ficha, a menos que algum personagem já esteja conectado a esta mesa.
+    if (list.some(c => (c.live || []).some(l => l.mesa === mesaId))) localStorage.removeItem('cf.invite');
+    else store('cf.invite', { id: mesaId, name: mesa.name });
+    $app.innerHTML = `<section class="page narrow">
+      <p class="eyebrow">Mesa ao vivo</p>
+      <h1>Convite para a mesa “${esc(mesa.name)}”</h1>
+      <p class="intro">Escolha o personagem que vai jogar. Depois de conectado, toda alteração que você fizer na ficha aparece para o mestre automaticamente.</p>
+      ${list.length ? `<div class="join-list">${list.map(c => {
+        const on = (c.live || []).some(l => l.mesa === mesaId);
+        const cls = R.classes[c.classId], race = R.races[c.raceId];
+        return `<article class="char-card"><h2>${esc(c.name || 'Sem nome')}</h2>
+          <p class="muted">${[race && race.name, cls && cls.name].filter(Boolean).join(' · ') || 'em criação'}</p>
+          <div class="row-actions">${on ? `<span class="tag ok">✓ Conectado</span> <a class="btn sm" href="#/ficha/${c.id}">Abrir ficha</a>` : `<button class="btn primary sm" data-action="live-connect" data-id="${c.id}" data-mesa="${mesaId}">📡 Conectar este</button>`}</div></article>`;
+      }).join('')}</div>
+      <p class="muted">Ainda não criou o personagem dessa campanha? <button class="btn sm" data-action="new-char">Criar personagem novo</button> — o convite fica guardado e aparece na ficha final.</p>`
+      : `<p class="callout">Você ainda não tem personagem neste navegador. <button class="btn primary sm" data-action="new-char">Criar meu personagem</button><br><small>O convite fica guardado: quando terminar, clique em “Conectar” na ficha.</small></p>`}
+    </section>`;
+  }
 
   function setPath(obj, path, value) {
     const parts = path.split('.');
@@ -113,6 +312,7 @@
       case 'quiz': return renderQuiz();
       case 'trilhas': return renderTrails();
       case 'grupo': return renderParty();
+      case 'mesa': return renderJoin(arg);
       case 'tutorial': return renderTutorial();
       case 'glossario': return renderGlossary();
       default: return renderHome();
@@ -724,6 +924,7 @@
       <button class="btn" data-action="party-add" data-id="${c.id}">🏰 Adicionar ao grupo</button>
       <a class="btn" href="#/tutorial">🗡️ Testar no tutorial</a>
     </div>
+    ${liveBar(c)}
     <p class="muted small no-print">Para PDF: clique em “Imprimir” e escolha <strong>Salvar como PDF</strong> no destino.</p>
     ${sheetHTML(c)}`;
   }
@@ -846,7 +1047,7 @@
 
   /* ============================================================ Aba Ficha */
   CF.ui = {
-    esc, sign, T, $app, toast, sheetHTML, afterRender: null, save: () => touch(),
+    esc, sign, T, $app, toast, sheetHTML, liveBar, afterRender: null, save: () => touch(),
     chars: () => chars, currentId: () => currentId,
     setCurrent(id) { currentId = id; saveChars(); }
   };
@@ -935,21 +1136,26 @@
     const roles = new Set(members.flatMap(m => C.roles[m.classId] || []));
     const missing = ['frente', 'cura', 'dano', 'social'].filter(r => !roles.has(r));
     const opt = members.map((m, i) => `<option value="${i}">${esc(m.name || 'Sem nome')}</option>`).join('');
+    startWatch();
+    const liveTag = m => !m._live ? '' : m._live.off
+      ? '<span class="tag live off" title="O jogador desconectou esta ficha da mesa. Esta é a última versão recebida.">⏸ fora da mesa</span>'
+      : `<span class="tag live" title="Atualiza sozinha quando o jogador altera a ficha">📡 ao vivo · <span data-ago="${m._live.at}">${ago(m._live.at)}</span></span>`;
     $app.innerHTML = `<section class="page">
       <p class="eyebrow">Party Builder</p>
       <h1><input class="title-input" type="text" data-party="name" value="${esc(party.name)}" aria-label="Nome da campanha" maxlength="60"></h1>
-      <p class="intro">Mestre: peça para cada jogador clicar em <strong>“Copiar código para o mestre”</strong> na ficha final e colar aqui. Os dados ficam salvos neste navegador.</p>
+      ${mesaPanel()}
+      <p class="intro">${L ? 'Também dá para adicionar fichas sem a mesa ao vivo: o jogador clica em <strong>“Copiar código para o mestre”</strong> e você cola aqui (nesse caso, a ficha não se atualiza sozinha).' : 'Mestre: peça para cada jogador clicar em <strong>“Copiar código para o mestre”</strong> na ficha final e colar aqui. Os dados ficam salvos neste navegador.'}</p>
       <div class="sheet-actions">
-        <button class="btn primary" data-action="party-import">📥 Colar código de personagem</button>
+        <button class="btn" data-action="party-import">📥 Colar código de personagem</button>
         ${mine.length ? `<select id="partyMine" aria-label="Adicionar personagem deste navegador"><option value="">Adicionar personagem deste navegador…</option>${mine.map(c => `<option value="${c.id}">${esc(c.name || 'Sem nome')}</option>`).join('')}</select>` : ''}
         ${members.length ? `<button class="btn" data-action="party-export">📋 Copiar código do grupo</button>` : ''}
       </div>
       ${members.length ? `<div class="party-cov ${missing.length ? '' : 'ok'}">${missing.length ? `<strong>Dica para o grupo:</strong> ninguém cobre ${missing.map(r => C.roleNames[r]).join(', ')}. Não é obrigatório — mas é bom saber!` : '<strong>Grupo equilibrado:</strong> há linha de frente, cura, dano e alguém para conversar.'}</div>
       <div class="party-grid">${members.map((m, i) => { const d = E.derive(m); const cls = R.classes[m.classId], race = R.races[m.raceId]; return `<article class="char-card">
-        <h2>${esc(m.name || 'Sem nome')}</h2><p class="muted">${[race && race.name, cls && cls.name].filter(Boolean).join(' · ')}${m.player ? ' — ' + esc(m.player) : ''}</p>
+        <h2>${esc(m.name || 'Sem nome')}</h2>${liveTag(m)}<p class="muted">${[race && race.name, cls && cls.name && cls.name + ' ' + d.level].filter(Boolean).join(' · ')}${m.player ? ' — ' + esc(m.player) : ''}</p>
         ${d.path && d.path.option ? `<p class="small">🗺️ ${d.path.pickLevel > 1 ? 'Planeja: ' : ''}<b>${esc(d.path.option.name)}</b>${d.path.pickLevel > 1 ? ` (nv ${d.path.pickLevel})` : ''}</p>` : ''}
         <p>${(C.roles[m.classId] || []).map(r => `<span class="tag">${C.roleNames[r]}</span>`).join(' ')}</p>
-        <p class="small">PV <b>${d.hp ?? '—'}</b> · CA <b>${d.ac}</b> · Percepção passiva <b>${d.passivePerception}</b>${d.spellcasting ? ` · CD magia <b>${d.spellcasting.dc}</b>` : ''}</p>
+        <p class="small">PV <b>${m.sheet && m.sheet.hpCurrent != null && m.sheet.hpCurrent !== '' ? esc(m.sheet.hpCurrent) + '/' : ''}${d.hp ?? '—'}</b> · CA <b>${d.ac}</b> · Percepção passiva <b>${d.passivePerception}</b>${d.spellcasting ? ` · CD magia <b>${d.spellcasting.dc}</b>` : ''}</p>
         ${m.story.motivation ? `<p class="small"><b>Motivação:</b> ${esc(m.story.motivation)}</p>` : ''}
         <div class="row-actions"><button class="btn sm" data-action="party-view" data-id="${i}">Ver ficha</button><button class="btn sm danger" data-action="party-remove" data-id="${i}">Remover</button></div></article>`; }).join('')}</div>` : '<p class="callout">Nenhum personagem no grupo ainda.</p>'}
       ${members.length >= 2 ? `<h2>Vínculos entre personagens</h2>
@@ -960,6 +1166,17 @@
         <ul class="bonds">${party.bonds.map((b, i) => `<li><strong>${esc(b.a)}</strong> ↔ <strong>${esc(b.b)}</strong>: ${esc(b.text)} <button class="btn sm danger" data-action="bond-remove" data-id="${i}" aria-label="Remover vínculo">✕</button></li>`).join('')}</ul>` : ''}
       <div id="partySheet"></div>
     </section>`;
+    if (partyView) {
+      const i = party.members.findIndex(m => m.id === partyView);
+      if (i >= 0) showPartySheet(i, false); else partyView = null;
+    }
+  }
+  function showPartySheet(i, scroll) {
+    const m = party.members[i], box = document.getElementById('partySheet');
+    if (!m || !box) return;
+    partyView = m.id;
+    box.innerHTML = `<div class="sheet-actions no-print"><button class="btn primary" data-action="print">🖨️ Imprimir esta ficha</button><button class="btn" data-action="party-close">Fechar ficha</button>${m._live && !m._live.off ? '<span class="muted small">📡 Esta ficha se atualiza sozinha.</span>' : ''}</div>${sheetHTML(m)}`;
+    if (scroll) box.scrollIntoView({ behavior: 'smooth' });
   }
   const BOND_IDEAS = ['cresceram na mesma vila', 'um salvou a vida do outro', 'são rivais amigáveis', 'um deve dinheiro ao outro', 'foram presos na mesma cela', 'servem ao mesmo mentor', 'são primos distantes', 'sobreviveram juntos a um naufrágio', 'dividem um segredo perigoso'];
 
@@ -1288,8 +1505,34 @@
         return;
       }
       case 'party-export': copyText(encodeShare(party)); return;
-      case 'party-remove': if (confirm('Remover do grupo?')) { party.members.splice(Number(id), 1); saveParty(); renderParty(); } return;
-      case 'party-view': { const m = party.members[Number(id)]; document.getElementById('partySheet').innerHTML = `<div class="sheet-actions no-print"><button class="btn primary" data-action="print">🖨️ Imprimir esta ficha</button></div>${sheetHTML(m)}`; document.getElementById('partySheet').scrollIntoView({ behavior: 'smooth' }); return; }
+      case 'party-remove': {
+        const m = party.members[Number(id)];
+        if (!m || !confirm(m._live && !m._live.off ? 'Remover do grupo? Esta ficha está ao vivo: ela deixa de aparecer aqui mesmo que o jogador continue alterando.' : 'Remover do grupo?')) return;
+        if (m._live) {
+          party.hidden = (party.hidden || []).concat([m._live.ficha]);
+          if (party.mesa && L) L.removeFicha(party.mesa.id, m._live.ficha).catch(err => console.warn(err));
+        }
+        if (partyView === m.id) partyView = null;
+        party.members.splice(Number(id), 1); saveParty(); renderParty(); return;
+      }
+      case 'party-view': showPartySheet(Number(id), true); return;
+      case 'party-close': partyView = null; document.getElementById('partySheet').innerHTML = ''; return;
+      case 'mesa-create': {
+        el.disabled = true; el.textContent = 'Criando…';
+        L.createMesa(party.name).then(mid => {
+          party.mesa = { id: mid, name: party.name }; party.hidden = []; saveParty();
+          renderParty(); toast('Mesa criada! Agora copie o convite e mande para os jogadores.');
+        }).catch(err => { console.warn(err); alert('Não foi possível criar a mesa agora. Verifique a internet e tente de novo.'); renderParty(); });
+        return;
+      }
+      case 'mesa-copy': copyText(L.inviteLink(party.mesa.id)); return;
+      case 'mesa-retry': stopWatch(); renderParty(); return;
+      case 'mesa-unhide': party.hidden = []; saveParty(); applyLive(lastList); renderParty(); return;
+      case 'mesa-off':
+        if (!confirm('Desligar a mesa neste navegador? As fichas atuais continuam no grupo, mas param de se atualizar. Para religar, crie uma mesa nova e mande o novo convite.')) return;
+        stopWatch(); delete party.mesa; saveParty(); renderParty(); return;
+      case 'live-connect': { const ch = chars[id]; if (ch) liveConnect(ch, el.dataset.mesa); return; }
+      case 'live-disconnect': { const ch = chars[id]; if (ch) liveDisconnect(ch, el.dataset.mesa); return; }
       case 'bond-add': case 'bond-random': {
         const a = party.members[Number(document.getElementById('bondA').value)], b = party.members[Number(document.getElementById('bondB').value)];
         if (act === 'bond-random') { document.getElementById('bondText').value = pick(BOND_IDEAS); return; }
@@ -1312,7 +1555,13 @@
       if (el.dataset.bind === 'name') { const st = document.getElementById('stepper'); if (st) renderStepper(c); }
     }
     if (el.dataset.manual && c) { c.abilities.manual[el.dataset.manual] = Number(el.value); touch(); renderPreview(c); renderStepper(c); }
-    if (el.dataset.party) { party[el.dataset.party] = el.value; saveParty(); }
+    if (el.dataset.party) {
+      party[el.dataset.party] = el.value; saveParty();
+      if (el.dataset.party === 'name' && party.mesa && L) {
+        clearTimeout(renameTimer);
+        renameTimer = setTimeout(() => L.renameMesa(party.mesa.id, party.name).then(ok => { if (ok) { party.mesa.name = party.name; saveParty(); } }).catch(err => console.warn(err)), 1500);
+      }
+    }
     if (el.dataset.st && c) { setPath(c, el.dataset.st, el.value); touch(); }
     if (el.id === 'glossSearch') { const q = el.value.toLowerCase().trim(); document.querySelectorAll('.gloss > div').forEach(d => { d.hidden = q && !d.dataset.g.includes(q); }); }
   });
