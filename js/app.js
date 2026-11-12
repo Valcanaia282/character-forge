@@ -266,8 +266,8 @@
       ${list.length ? `<div class="join-list">${list.map(c => {
         const on = (c.live || []).some(l => l.mesa === mesaId);
         const cls = R.classes[c.classId], race = R.races[c.raceId];
-        return `<article class="char-card"><h2>${esc(c.name || 'Sem nome')}</h2>
-          <p class="muted">${[race && race.name, cls && cls.name].filter(Boolean).join(' · ') || 'em criação'}</p>
+        return `<article class="char-card"><div class="card-id">${CF.portrait.avatar(c)}<div><h2>${esc(c.name || 'Sem nome')}</h2>
+          <p class="muted">${[race && race.name, cls && cls.name].filter(Boolean).join(' · ') || 'em criação'}</p></div></div>
           <div class="row-actions">${on ? `<span class="tag ok">✓ Conectado</span> <a class="btn sm" href="#/ficha/${c.id}">Abrir ficha</a>` : `<button class="btn primary sm" data-action="live-connect" data-id="${c.id}" data-mesa="${mesaId}">📡 Conectar este</button>`}</div></article>`;
       }).join('')}</div>
       <p class="muted">Ainda não criou o personagem dessa campanha? <button class="btn sm" data-action="new-char">Criar personagem novo</button> — o convite fica guardado e aparece na ficha final.</p>`
@@ -869,6 +869,7 @@
       <label class="field"><span>Idade</span><input type="text" data-bind="story.age" value="${esc(st.age)}" maxlength="20"></label>
     </div>
     <label class="field"><span>Aparência</span><input type="text" data-bind="story.appearance" value="${esc(st.appearance)}" maxlength="200" placeholder="Ex.: cabelo ruivo trançado, cicatriz no queixo, capa verde"></label>
+    <div class="field"><span>Foto ou desenho do personagem <small class="muted">(opcional — aparece na ficha, na impressão e para o mestre)</small></span>${CF.portrait.widget(c, { cls: 'inline' })}</div>
     <h3>Perguntas de origem</h3>${q}
     <h3>Personalidade</h3>${pers}
     <label class="field"><span>Vínculos (pessoas, lugares ou objetos importantes)</span><input type="text" data-bind="story.bonds" value="${esc(st.bonds)}" maxlength="200"></label>
@@ -974,7 +975,7 @@
     }
     return `<article class="sheet" id="sheet">
       <header class="sh-head">
-        <div class="sh-name"><h3>${esc(c.name || 'Sem nome')}</h3><small>Nome do personagem</small></div>
+        <div class="sh-name">${CF.portrait.valid(c.portrait) ? `<img class="sh-portrait" src="${c.portrait}" alt="">` : ''}<div><h3>${esc(c.name || 'Sem nome')}</h3><small>Nome do personagem</small></div></div>
         <dl class="sh-meta">
           <div><dt>Classe e nível</dt><dd>${cls ? cls.name + ' ' + d.level : '—'}${d.path && d.path.option && d.path.pickLevel <= d.level ? ' (' + esc(d.path.option.name) + ')' : ''}</dd></div>
           ${d.path && d.path.option && d.path.pickLevel > d.level ? `<div><dt>Caminho planejado (nv ${d.path.pickLevel})</dt><dd>${esc(d.path.option.name)}</dd></div>` : ''}
@@ -1075,8 +1076,8 @@
         const errs = E.validate(c).filter(i => i.level === 'error').length;
         const cls = R.classes[c.classId], race = R.races[c.raceId];
         return `<article class="char-card">
-          <h2>${esc(c.name || 'Sem nome')}</h2>
-          <p class="muted">${[race && race.name, cls && cls.name].filter(Boolean).join(' · ') || 'Em criação'}${c.player ? ' — ' + esc(c.player) : ''}</p>
+          <div class="card-id">${CF.portrait.avatar(c)}<div><h2>${esc(c.name || 'Sem nome')}</h2>
+          <p class="muted">${[race && race.name, cls && cls.name].filter(Boolean).join(' · ') || 'Em criação'}${c.player ? ' — ' + esc(c.player) : ''}</p></div></div>
           <p class="${errs ? 'warn' : 'ok'}">${errs ? `⏳ ${errs} pendência(s) — etapa ${c.step + 1}/${STEPS.length}` : '✅ Ficha completa'}</p>
           <div class="row-actions">
             <button class="btn sm primary" data-action="open-char" data-id="${c.id}">Continuar</button>
@@ -1153,7 +1154,7 @@
       </div>
       ${members.length ? `<div class="party-cov ${missing.length ? '' : 'ok'}">${missing.length ? `<strong>Dica para o grupo:</strong> ninguém cobre ${missing.map(r => C.roleNames[r]).join(', ')}. Não é obrigatório — mas é bom saber!` : '<strong>Grupo equilibrado:</strong> há linha de frente, cura, dano e alguém para conversar.'}</div>
       <div class="party-grid">${members.map((m, i) => { const d = E.derive(m); const cls = R.classes[m.classId], race = R.races[m.raceId]; return `<article class="char-card">
-        <h2>${esc(m.name || 'Sem nome')}</h2>${liveTag(m)}<p class="muted">${[race && race.name, cls && cls.name && cls.name + ' ' + d.level].filter(Boolean).join(' · ')}${m.player ? ' — ' + esc(m.player) : ''}</p>
+        <div class="card-id">${CF.portrait.avatar(m, 'lg')}<div><h2>${esc(m.name || 'Sem nome')}</h2>${liveTag(m)}<p class="muted">${[race && race.name, cls && cls.name && cls.name + ' ' + d.level].filter(Boolean).join(' · ')}${m.player ? ' — ' + esc(m.player) : ''}</p></div></div>
         ${d.path && d.path.option ? `<p class="small">🗺️ ${d.path.pickLevel > 1 ? 'Planeja: ' : ''}<b>${esc(d.path.option.name)}</b>${d.path.pickLevel > 1 ? ` (nv ${d.path.pickLevel})` : ''}</p>` : ''}
         <p>${(C.roles[m.classId] || []).map(r => `<span class="tag">${C.roleNames[r]}</span>`).join(' ')}</p>
         <p class="small">PV <b>${m.sheet && m.sheet.hpCurrent != null && m.sheet.hpCurrent !== '' ? esc(m.sheet.hpCurrent) + '/' : ''}${d.hp ?? '—'}</b> · CA <b>${d.ac}</b> · Percepção passiva <b>${d.passivePerception}</b>${d.spellcasting ? ` · CD magia <b>${d.spellcasting.dc}</b>` : ''}</p>
@@ -1468,7 +1469,7 @@
         if (c.story.backstory.trim() && !confirm('Substituir o texto atual da história pelo rascunho gerado?')) return;
         c.story.backstory = genStory(c); toast('Rascunho criado! Edite como quiser.'); return done();
       case 'print': window.print(); return;
-      case 'copy-code': copyText(encodeShare(chars[id])); return;
+      case 'copy-code': copyText(encodeShare(CF.portrait.strip(chars[id]))); return;
       case 'download-json': { const ch = chars[id]; download((ch.name || 'personagem').replace(/[^\w\-]+/g, '_') + '.json', JSON.stringify({ app: 'character-forge', version: 1, character: ch }, null, 2)); return; }
       case 'duplicate': { const copy = migrate(JSON.parse(JSON.stringify(chars[id]))); copy.id = E.newCharacter().id; copy.name = (copy.name || 'Sem nome') + ' (cópia)'; copy.updatedAt = Date.now(); chars[copy.id] = copy; saveChars(); renderList(); return; }
       case 'delete-char':
@@ -1505,7 +1506,7 @@
         } catch (err) { alert('Não foi possível importar: ' + err.message); }
         return;
       }
-      case 'party-export': copyText(encodeShare(party)); return;
+      case 'party-export': copyText(encodeShare(Object.assign({}, party, { members: party.members.map(CF.portrait.strip) }))); return;
       case 'party-remove': {
         const m = party.members[Number(id)];
         if (!m || !confirm(m._live && !m._live.off ? 'Remover do grupo? Esta ficha está ao vivo: ela deixa de aparecer aqui mesmo que o jogador continue alterando.' : 'Remover do grupo?')) return;
@@ -1532,6 +1533,13 @@
       case 'mesa-off':
         if (!confirm('Desligar a mesa neste navegador? As fichas atuais continuam no grupo, mas param de se atualizar. Para religar, crie uma mesa nova e mande o novo convite.')) return;
         stopWatch(); delete party.mesa; saveParty(); renderParty(); return;
+      case 'portrait-remove': {
+        const ch = chars[id];
+        if (!ch || !confirm('Remover a foto de “' + (ch.name || 'personagem') + '”?')) return;
+        delete ch.portrait; ch.updatedAt = Date.now(); saveChars();
+        if (route()[0] === 'ficha') rerenderLive(); else rerender();
+        return;
+      }
       case 'live-connect': { const ch = chars[id]; if (ch) liveConnect(ch, el.dataset.mesa); return; }
       case 'live-disconnect': { const ch = chars[id]; if (ch) liveDisconnect(ch, el.dataset.mesa); return; }
       case 'bond-add': case 'bond-random': {
@@ -1569,6 +1577,25 @@
   document.addEventListener('change', e => {
     const el = e.target;
     const c = cur();
+    if (el.dataset.portrait && el.files && el.files[0]) {
+      const ch = chars[el.dataset.portrait], file = el.files[0];
+      if (!ch) return;
+      toast('Preparando a foto…');
+      CF.portrait.process(file).then(src => {
+        const old = ch.portrait;
+        ch.portrait = src; ch.updatedAt = Date.now();
+        if (!store('cf.chars', chars)) {
+          if (old) ch.portrait = old; else delete ch.portrait;
+          alert('Não há espaço neste navegador para guardar a foto. Remova fotos de outros personagens ou apague personagens antigos.');
+          return;
+        }
+        saveChars();
+        toast('Foto salva!');
+        if (route()[0] === 'ficha') rerenderLive(); else rerender();
+      }).catch(err => { console.warn(err); alert(CF.portrait.errorText(err)); });
+      el.value = '';
+      return;
+    }
     if (el.dataset.pk && c && CF.sheetTab) {
       if (CF.sheetTab.pickChange(CF.ui, c, el)) {
         touch();

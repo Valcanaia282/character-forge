@@ -507,6 +507,7 @@
 
       <article class="live">
         <header class="lcard lhead">
+          <div class="lhead-top">${CF.portrait.widget(c)}<div class="lhead-main">
           <div class="lname"><input type="text" class="name-input" data-st="name" value="${esc(c.name)}" placeholder="Nome do personagem" aria-label="Nome do personagem"></div>
           <div class="lmeta">
             <label><span>Classe</span><b>${cls ? cls.name : '—'}</b></label>
@@ -518,6 +519,7 @@
             <label><span>Tendência</span><select data-sel="story.alignment"><option value="">—</option>${R.alignments.map(a => `<option ${c.story.alignment === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
             <label><span>XP</span><input type="number" min="0" data-sv="sheet.xp" value="${sh.xp}"></label>
           </div>
+          </div></div>
           ${newHere && d.level > 1 ? `<div class="callout small lnew">🎉 <b>Novidades do nível ${d.level}:</b> ${newHere.items.map(i => esc(i.t)).join(' · ')}. <span class="muted">As habilidades novas já aparecem em “Habilidades e características”.</span></div>` : ''}
           ${pend ? `<div class="callout small lnew warn no-print">🧬 Você tem <b>${pend} escolha${pend > 1 ? 's' : ''} de evolução</b> pendente${pend > 1 ? 's' : ''} (${d.pendingPicks.map(x => 'nv ' + x.lvl + ': ' + esc(x.label)).join(' · ')}). <button class="btn sm" data-action="goto-picks">Fazer agora ↓</button></div>` : ''}
         </header>
