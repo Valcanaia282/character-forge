@@ -17,17 +17,20 @@ Ele pergunta o que você quer jogar, explica cada escolha com linguagem simples 
 | **Descubra seu aventureiro** | Quiz de 5 perguntas que recomenda as 3 classes que mais combinam com você. |
 | **Ficha inteligente** | Cálculo automático de PV, CA (testa todas as opções e usa a melhor), iniciativa, resistências, perícias, ataques, CD e ataque mágico, recursos de classe. Validação de regras com atalhos para corrigir. |
 | **Gerador de histórias** | Perguntas de origem (motivação, medo, confiança, objetivo, segredo) com ideias clicáveis e um rascunho editável. |
-| **Grupo (Party Builder)** | O mestre cola o código de cada jogador, vê a composição do grupo e cria vínculos entre os personagens. |
+| **Grupo (Party Builder)** | O mestre vê a composição do grupo e cria vínculos entre os personagens. As fichas entram pela mesa ao vivo ou colando o código de cada jogador. |
+| **Mesa ao vivo** | O mestre cria a mesa na aba Grupo e manda o link de convite. Cada jogador conecta o personagem uma vez; depois disso, toda alteração salva na ficha (nível, PV, magias, itens…) aparece sozinha na aba Grupo do mestre, em segundos. |
 | **Tutorial de combate** | Encontro com um goblin usando a sua ficha, com dados de verdade e explicação da regra a cada jogada. |
 | **Glossário** | Termos como CA, vantagem, truque e concentração explicados sem complicação (também aparecem como dica ao clicar nos termos sublinhados). |
 
 ## Como usar com os amigos
 
-1. Cada jogador abre o site e clica em **Criar meu personagem**.
-2. Na **Ficha final**, clica em **Copiar código para o mestre** e manda no WhatsApp/Discord (ou **Imprimir / Salvar PDF**).
-3. O mestre abre **Grupo**, clica em **Colar código de personagem** e cola o código de cada um.
+1. O mestre abre **Grupo**, clica em **Criar mesa ao vivo** e manda o **link de convite** no WhatsApp/Discord.
+2. Cada jogador abre o link, escolhe o personagem (ou cria um) e clica em **Conectar**.
+3. Pronto: quando o jogador altera a ficha, a aba Grupo do mestre se atualiza sozinha.
 
-O progresso fica salvo automaticamente no navegador de cada pessoa (não há login nem servidor).
+Sem a mesa ao vivo, ainda dá para usar **Copiar código para o mestre** → **Colar código de personagem** (nesse caso, a ficha não se atualiza sozinha).
+
+O progresso fica salvo no navegador de cada pessoa, sem cadastro. A mesa ao vivo usa o Firebase (Google) com login anônimo: só as fichas conectadas a uma mesa são enviadas, e só quem tem o link da mesa consegue lê-las. As regras de acesso estão em `firestore.rules` (cada jogador só altera a própria ficha; o mestre pode removê-las da mesa).
 
 ## Regras e licença do conteúdo
 
@@ -54,7 +57,9 @@ js/recommend.js          recomendações de antecedente, idiomas e ferramentas
 js/data/subclasses.js    caminhos (subclasses) por classe e marcos de evolução até o nível 12
 js/engine.js             motor de cálculo e validação (sem lógica visual)
 js/sheet.js              aba Ficha: ficha de jogo editável
+js/live.js               mesa ao vivo (Firebase: login anônimo + Firestore, carregado só quando usado)
 js/app.js                interface
+firestore.rules          regras de acesso do banco da mesa ao vivo (cópia do que está publicado no Firebase)
 ```
 
 Não precisa de build: é HTML, CSS e JavaScript puro. Para rodar localmente, abra o `index.html` no navegador ou sirva a pasta:
@@ -66,6 +71,6 @@ python -m http.server 8000
 ## Próximos passos (roadmap da proposta)
 
 - Fase 2: retrato do personagem e mais opções de conteúdo (definidas pelo mestre).
-- Fase 3: campanha online compartilhada (ex.: Supabase) com login.
+- Fase 3: campanha online compartilhada — primeira parte pronta (mesa ao vivo com Firebase); falta login com conta para usar a mesma ficha em vários aparelhos.
 - Fase 4: modo “companion” para a sessão (controle de PV, espaços de magia, recursos).
 - Fase 5: assistência de IA para narrativa, com regras sempre validadas pelo motor.

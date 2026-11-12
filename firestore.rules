@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// Regras do banco do Character Forge (Mesa ao vivo).
+// - Todo acesso exige login anônimo (cada navegador recebe um id próprio).
+// - Uma mesa só pode ser lida por quem tem o código dela (não dá para listar mesas).
+// - Cada jogador só cria/altera as próprias fichas; o dono da mesa pode removê-las.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function mesaPath(mesaId) { return /databases/$(database)/documents/mesas/$(mesaId); }
+    function validMesa(d) {
+      return d.keys().hasOnly(['name', 'owner', 'createdAt'])
+        && d.name is string && d.name.size() <= 80
+        && d.owner == request.auth.uid
+        && d.createdAt is int;
+    }
+    function validFicha(d) {
+      return d.keys().hasOnly(['owner', 'name', 'data', 'updatedAt'])
+        && d.owner == request.auth.uid
+        && d.name is string && d.name.size() <= 120
+        && d.data is string && d.data.size() <= 300000
+        && d.updatedAt is int;
+    }
+
+    match /mesas/{mesaId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && validMesa(request.resource.data);
+      allow update: if signedIn() && resource.data.owner == request.auth.uid && validMesa(request.resource.data);
+      allow delete: if signedIn() && resource.data.owner == request.auth.uid;
+
+      match /fichas/{fichaId} {
+        allow read: if signedIn() && exists(mesaPath(mesaId));
+        allow create: if signedIn() && exists(mesaPath(mesaId))
+          && fichaId.matches(request.auth.uid + '_[A-Za-z0-9_-]+')
+          && validFicha(request.resource.data);
+        allow update: if signedIn() && resource.data.owner == request.auth.uid
+          && validFicha(request.resource.data);
+        allow delete: if signedIn() && (resource.data.owner == request.auth.uid
+          || get(mesaPath(mesaId)).data.owner == request.auth.uid);
+      }
+    }
+  }
+}
