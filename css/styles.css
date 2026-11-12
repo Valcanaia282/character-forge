@@ -667,3 +667,32 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
   .dice-hist li { grid-template-columns: auto 1fr auto; }
   .dice-hist .h-rolls { grid-column: 2 / 3; grid-row: 2; }
 }
+
+/* ===== Foto do personagem ===== */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.portrait { display: grid; gap: 8px; justify-items: center; align-content: start; }
+.portrait.inline { grid-template-columns: auto 1fr; justify-items: start; align-items: center; gap: 14px; }
+.portrait-frame { width: 132px; aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 2px solid var(--gold); background: var(--panel-2); display: grid; place-items: center; box-shadow: var(--shadow); }
+.portrait.inline .portrait-frame { width: 96px; }
+.portrait-frame img { width: 100%; height: 100%; object-fit: cover; object-position: center 25%; display: block; }
+.portrait-ph { font: 700 3rem var(--serif); color: var(--line); }
+.portrait-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.portrait-actions label.btn { cursor: pointer; }
+.portrait-actions label.btn:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lhead-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: start; }
+.lhead-main { min-width: 0; }
+.card-id { display: flex; gap: 12px; align-items: center; }
+.card-id > div { min-width: 0; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; object-position: center 25%; border: 2px solid var(--gold); flex: none; background: var(--panel-2); }
+.avatar.lg { width: 64px; height: 64px; }
+.avatar.ph { display: grid; place-items: center; font: 700 1.3rem var(--serif); color: var(--muted); border-color: var(--line); }
+.sh-name { display: flex; gap: 12px; align-items: center; }
+.sh-name > div { min-width: 0; flex: 1; }
+.sh-portrait { width: 96px; height: 96px; object-fit: cover; object-position: center 25%; border: 1px solid var(--parch-line); border-radius: 8px; flex: none; }
+@media (max-width: 640px) {
+  .lhead-top { grid-template-columns: 1fr; }
+  .portrait-frame { width: 120px; }
+}
+@media print {
+  .sh-portrait { width: 80px; height: 80px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
