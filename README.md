@@ -19,6 +19,7 @@ Ele pergunta o que você quer jogar, explica cada escolha com linguagem simples 
 | **Gerador de histórias** | Perguntas de origem (motivação, medo, confiança, objetivo, segredo) com ideias clicáveis e um rascunho editável. |
 | **Grupo (Party Builder)** | O mestre vê a composição do grupo e cria vínculos entre os personagens. As fichas entram pela mesa ao vivo ou colando o código de cada jogador. |
 | **Mesa ao vivo** | O mestre cria a mesa na aba Grupo e manda o link de convite. Cada jogador conecta o personagem uma vez; depois disso, toda alteração salva na ficha (nível, PV, magias, itens…) aparece sozinha na aba Grupo do mestre, em segundos. |
+| **Rolar dados** | Aba Dados com d4, d6, d8, d10, d12 e d20: quantidade de dados, bônus, vantagem/desvantagem no d20, aviso de 20 e 1 natural e histórico das últimas 30 rolagens. Sorteio justo com o gerador criptográfico do navegador. |
 | **Tutorial de combate** | Encontro com um goblin usando a sua ficha, com dados de verdade e explicação da regra a cada jogada. |
 | **Glossário** | Termos como CA, vantagem, truque e concentração explicados sem complicação (também aparecem como dica ao clicar nos termos sublinhados). |
 
@@ -58,6 +59,7 @@ js/data/subclasses.js    caminhos (subclasses) por classe e marcos de evolução
 js/engine.js             motor de cálculo e validação (sem lógica visual)
 js/sheet.js              aba Ficha: ficha de jogo editável
 js/live.js               mesa ao vivo (Firebase: login anônimo + Firestore, carregado só quando usado)
+js/dice.js               rolador de dados
 js/app.js                interface
 firestore.rules          regras de acesso do banco da mesa ao vivo (cópia do que está publicado no Firebase)
 ```
