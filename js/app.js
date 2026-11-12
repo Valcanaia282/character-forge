@@ -313,6 +313,7 @@
       case 'trilhas': return renderTrails();
       case 'grupo': return renderParty();
       case 'mesa': return renderJoin(arg);
+      case 'dados': return CF.dice.render($app);
       case 'tutorial': return renderTutorial();
       case 'glossario': return renderGlossary();
       default: return renderHome();
