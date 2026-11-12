@@ -14,6 +14,7 @@ Ele pergunta o que você quer jogar, explica cada escolha com linguagem simples 
 | **Recomendações** | Antecedentes (os 13 do Livro do Jogador + personalizado), idiomas e ferramentas sugeridos conforme classe, caminho e espécie, com o motivo de cada sugestão. |
 | **Habilidades automáticas** | Todas as habilidades de classe do nível 1 ao 12 calculadas na ficha (Ataque Furtivo, Fúria, chi, Aura de Proteção, ataques extras, deslocamento etc.), nos 12 caminhos do SRD e nos 36 caminhos do Livro do Jogador/Xanathar que também existem no Baldur's Gate 3. Nos demais caminhos, a ficha indica nível e página do livro. |
 | **Evolução no estilo BG3** | Quadro “Evolução: escolhas por nível” na ficha: aumento de atributo ou talento (os 42 talentos do Livro do Jogador, com os do BG3 em destaque), estilos de luta, especializações, manobras, metamagias, invocações, dádiva do pacto, disciplinas elementais, disparos arcanos, totens, companheiro animal, terreno do druida etc. A ficha aplica os efeitos (atributos, CA, iniciativa, PV, perícias, resistências, recursos, magias do caminho). |
+| **Foto do personagem** | Cada jogador envia uma foto ou desenho do personagem (na aba Ficha ou na etapa História). A imagem é reduzida no próprio navegador (até 400 px) e aparece na ficha, na impressão/PDF, em Meus personagens e no Grupo do mestre — inclusive pela mesa ao vivo. Não vai junto no “código para o mestre” (ficaria grande demais); vai no arquivo baixado e na mesa ao vivo. |
 | **Descubra seu aventureiro** | Quiz de 5 perguntas que recomenda as 3 classes que mais combinam com você. |
 | **Ficha inteligente** | Cálculo automático de PV, CA (testa todas as opções e usa a melhor), iniciativa, resistências, perícias, ataques, CD e ataque mágico, recursos de classe. Validação de regras com atalhos para corrigir. |
 | **Gerador de histórias** | Perguntas de origem (motivação, medo, confiança, objetivo, segredo) com ideias clicáveis e um rascunho editável. |
@@ -60,6 +61,7 @@ js/engine.js             motor de cálculo e validação (sem lógica visual)
 js/sheet.js              aba Ficha: ficha de jogo editável
 js/live.js               mesa ao vivo (Firebase: login anônimo + Firestore, carregado só quando usado)
 js/dice.js               rolador de dados
+js/portrait.js           foto do personagem (redimensiona e guarda na ficha)
 js/app.js                interface
 firestore.rules          regras de acesso do banco da mesa ao vivo (cópia do que está publicado no Firebase)
 ```
