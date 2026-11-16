@@ -696,3 +696,15 @@ caption { text-align: left; font-family: var(--serif); color: var(--gold-2); pad
 @media print {
   .sh-portrait { width: 80px; height: 80px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ===== Salvar PDF (mesmo layout da impressão, renderizado fora da tela) ===== */
+.pdf-host { width: 100%; box-sizing: border-box; padding: 2px; background: #fff; color: #000; }
+.pdf-host .sheet { width: 100%; margin: 0; box-shadow: none; border-radius: 0; background: #fff; padding: 0; font-size: 9.5pt; container-type: normal; }
+.pdf-host .sh-cols { grid-template-columns: 1fr 1.4fr 1fr; }
+.pdf-host .sh-col:last-child { grid-column: auto; grid-template-columns: 1fr; }
+.pdf-host .sh-head { grid-template-columns: 1fr 2fr; }
+.pdf-host .sh-stats { grid-template-columns: repeat(8, 1fr); }
+.pdf-host .sh-meta { grid-template-columns: repeat(3, 1fr); }
+.pdf-host .sh-box, .pdf-host .sh-stats div { background: transparent; }
+.pdf-host .sh-portrait { width: 80px; height: 80px; }
+.pdf-host .no-print { display: none !important; }
