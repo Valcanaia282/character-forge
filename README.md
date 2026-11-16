@@ -2,7 +2,7 @@
 
 Assistente web, em português, para **criar personagens de D&D 5e passo a passo** — feito para jogadores de primeira viagem.
 
-Ele pergunta o que você quer jogar, explica cada escolha com linguagem simples e **faz todas as contas da ficha** (PV, CA, modificadores, perícias, ataques, CD de magia…). No final, você imprime ou salva a ficha em PDF.
+Ele pergunta o que você quer jogar, explica cada escolha com linguagem simples e **faz todas as contas da ficha** (PV, CA, modificadores, perícias, ataques, CD de magia…). No final, você salva a ficha em PDF com um clique.
 
 ## O que tem
 
