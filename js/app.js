@@ -347,7 +347,7 @@
       <ol class="how-steps">
         ${STEPS.map(s => `<li><span>${s.icon}</span>${s.title}</li>`).join('')}
       </ol>
-      <p class="muted">Seu progresso fica salvo neste navegador${list.length ? ` (${list.length} personagem${list.length > 1 ? 's' : ''} salvo${list.length > 1 ? 's' : ''})` : ''}. No final você imprime ou salva a ficha em PDF e manda para o mestre.</p>
+      <p class="muted">Seu progresso fica salvo neste navegador${list.length ? ` (${list.length} personagem${list.length > 1 ? 's' : ''} salvo${list.length > 1 ? 's' : ''})` : ''}. No final você salva a ficha em PDF e manda para o mestre.</p>
     </section>`;
   }
 
@@ -919,7 +919,7 @@
     return `
     ${errs.length ? `<div class="callout error no-print">Esta ficha ainda tem ${errs.length} pendência(s). <button class="btn sm" data-action="goto-step" data-id="8">Ver revisão</button></div>` : ''}
     <div class="sheet-actions no-print">
-      <button class="btn primary" data-action="print">🖨️ Imprimir / Salvar PDF</button>
+      <button class="btn primary" data-action="save-pdf">📄 Salvar PDF</button>
       <a class="btn" href="#/ficha/${c.id}">📝 Abrir na aba Ficha (editar livremente)</a>
       <button class="btn" data-action="copy-code" data-id="${c.id}">📋 Copiar código para o mestre</button>
       <button class="btn" data-action="download-json" data-id="${c.id}">⬇️ Baixar arquivo</button>
@@ -927,7 +927,6 @@
       <a class="btn" href="#/tutorial">🗡️ Testar no tutorial</a>
     </div>
     ${liveBar(c)}
-    <p class="muted small no-print">Para PDF: clique em “Imprimir” e escolha <strong>Salvar como PDF</strong> no destino.</p>
     ${sheetHTML(c)}`;
   }
 
@@ -1093,7 +1092,7 @@
     const c = chars[id];
     if (!c) { $app.innerHTML = '<section class="page"><p class="callout">Personagem não encontrado.</p></section>'; return; }
     $app.innerHTML = `<section class="page"><div class="sheet-actions no-print">
-      <a class="btn" href="#/personagens">← Voltar</a><button class="btn primary" data-action="print">🖨️ Imprimir / Salvar PDF</button>
+      <a class="btn" href="#/personagens">← Voltar</a><button class="btn primary" data-action="save-pdf">📄 Salvar PDF</button>
       <button class="btn" data-action="open-char" data-id="${c.id}">✏️ Editar</button></div>${sheetHTML(c)}</section>`;
   }
   function importCharacter(obj) {
@@ -1177,7 +1176,7 @@
     const m = party.members[i], box = document.getElementById('partySheet');
     if (!m || !box) return;
     partyView = m.id;
-    box.innerHTML = `<div class="sheet-actions no-print"><button class="btn primary" data-action="print">🖨️ Imprimir esta ficha</button><button class="btn" data-action="party-close">Fechar ficha</button>${m._live && !m._live.off ? '<span class="muted small">📡 Esta ficha se atualiza sozinha.</span>' : ''}</div>${sheetHTML(m)}`;
+    box.innerHTML = `<div class="sheet-actions no-print"><button class="btn primary" data-action="save-pdf">📄 Salvar PDF</button><button class="btn" data-action="party-close">Fechar ficha</button>${m._live && !m._live.off ? '<span class="muted small">📡 Esta ficha se atualiza sozinha.</span>' : ''}</div>${sheetHTML(m)}`;
     if (scroll) box.scrollIntoView({ behavior: 'smooth' });
   }
   const BOND_IDEAS = ['cresceram na mesma vila', 'um salvou a vida do outro', 'são rivais amigáveis', 'um deve dinheiro ao outro', 'foram presos na mesma cela', 'servem ao mesmo mentor', 'são primos distantes', 'sobreviveram juntos a um naufrágio', 'dividem um segredo perigoso'];
@@ -1468,7 +1467,11 @@
       case 'gen-story':
         if (c.story.backstory.trim() && !confirm('Substituir o texto atual da história pelo rascunho gerado?')) return;
         c.story.backstory = genStory(c); toast('Rascunho criado! Edite como quiser.'); return done();
-      case 'print': window.print(); return;
+      case 'save-pdf': {
+        const sh = (el.closest('#partySheet') || document).querySelector('.sheet');
+        if (sh) CF.pdf.save(sh, (sh.querySelector('.sh-name h3') || {}).textContent, toast);
+        return;
+      }
       case 'copy-code': copyText(encodeShare(CF.portrait.strip(chars[id]))); return;
       case 'download-json': { const ch = chars[id]; download((ch.name || 'personagem').replace(/[^\w\-]+/g, '_') + '.json', JSON.stringify({ app: 'character-forge', version: 1, character: ch }, null, 2)); return; }
       case 'duplicate': { const copy = migrate(JSON.parse(JSON.stringify(chars[id]))); copy.id = E.newCharacter().id; copy.name = (copy.name || 'Sem nome') + ' (cópia)'; copy.updatedAt = Date.now(); chars[copy.id] = copy; saveChars(); renderList(); return; }
