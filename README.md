@@ -46,7 +46,7 @@ O progresso fica salvo no navegador de cada pessoa, sem cadastro. A mesa ao vivo
 ## Estrutura
 
 ```
-index.html               página única (rotas por #hash)
+index.html               página única (rotas por #hash). Ao publicar mudanças, troque o `?v=` dos scripts e do CSS para o navegador baixar a versão nova
 css/styles.css           tema visual + layout de impressão da ficha
 js/data/rules-srd51.js   TODAS as regras (classes, espécies, armas, magias…) — troque este arquivo para mudar de edição
 js/data/content.js       conteúdo didático: conceitos, quiz, glossário, ideias de história
