@@ -704,7 +704,7 @@
       case 'sp-reseed': { const before = sh.spells.length; sh.spells = seedSpells(c, d, sh.spells); ui.toast(sh.spells.length > before ? `${sh.spells.length - before} magia(s) trazida(s) do assistente.` : 'O quadro já tem todas as magias do assistente.'); return true; }
       case 'rm-item': sh.removedItems.push(id); return true;
       case 'restore-items': sh.removedItems = []; return true;
-      case 'pdf-live': CF.pdf.save(ui.sheetHTML(c), c.name, ui.toast); return false;
+      case 'pdf-live': CF.pdf.save(ui.sheetHTML(c), c.name, ui.toast, ui.pdfCode(c)); return false;
       case 'goto-picks': { const p = document.querySelector('.pk.todo') || document.getElementById('picksPanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'center' }); return false; }
     }
     return null; // não é uma ação da ficha

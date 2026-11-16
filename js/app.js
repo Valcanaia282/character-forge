@@ -17,6 +17,12 @@
   function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; } }
 
   function encodeShare(obj) { return 'CF1:' + btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
+  /* código guardado dentro do PDF (ficha completa, com foto; sem dados internos da mesa ao vivo) */
+  function pdfCode(ch) {
+    if (!ch) return '';
+    const clean = {}; Object.keys(ch).forEach(k => { if (k[0] !== '_') clean[k] = ch[k]; });
+    return encodeShare({ app: 'character-forge', version: 1, character: clean });
+  }
   function decodeShare(code) {
     code = (code || '').trim();
     if (code.startsWith('{')) return JSON.parse(code);
@@ -919,7 +925,7 @@
     return `
     ${errs.length ? `<div class="callout error no-print">Esta ficha ainda tem ${errs.length} pendência(s). <button class="btn sm" data-action="goto-step" data-id="8">Ver revisão</button></div>` : ''}
     <div class="sheet-actions no-print">
-      <button class="btn primary" data-action="save-pdf">📄 Salvar PDF</button>
+      <button class="btn primary" data-action="save-pdf" data-id="${c.id}">📄 Salvar PDF</button>
       <a class="btn" href="#/ficha/${c.id}">📝 Abrir na aba Ficha (editar livremente)</a>
       <button class="btn" data-action="copy-code" data-id="${c.id}">📋 Copiar código para o mestre</button>
       <button class="btn" data-action="download-json" data-id="${c.id}">⬇️ Baixar arquivo</button>
@@ -1048,7 +1054,7 @@
 
   /* ============================================================ Aba Ficha */
   CF.ui = {
-    esc, sign, T, $app, toast, sheetHTML, liveBar, afterRender: null, save: () => touch(),
+    esc, sign, T, $app, toast, sheetHTML, liveBar, pdfCode, afterRender: null, save: () => touch(),
     chars: () => chars, currentId: () => currentId,
     setCurrent(id) { currentId = id; saveChars(); }
   };
@@ -1070,7 +1076,7 @@
       <h1>Meus personagens</h1>
       <div class="sheet-actions"><button class="btn primary" data-action="new-char">+ Novo personagem</button>
         <button class="btn" data-action="import-code">📥 Colar código</button>
-        <label class="btn">📂 Abrir arquivo<input type="file" accept=".json,application/json" data-action-file="import-file" hidden></label></div>
+        <label class="btn" title="Arquivo .json ou PDF salvo pelo Character Forge">📂 Abrir arquivo (JSON ou PDF)<input type="file" accept=".json,.pdf,application/json,application/pdf" data-action-file="import-file" hidden></label></div>
       ${list.length ? `<div class="char-list">${list.map(c => {
         const errs = E.validate(c).filter(i => i.level === 'error').length;
         const cls = R.classes[c.classId], race = R.races[c.raceId];
@@ -1092,7 +1098,7 @@
     const c = chars[id];
     if (!c) { $app.innerHTML = '<section class="page"><p class="callout">Personagem não encontrado.</p></section>'; return; }
     $app.innerHTML = `<section class="page"><div class="sheet-actions no-print">
-      <a class="btn" href="#/personagens">← Voltar</a><button class="btn primary" data-action="save-pdf">📄 Salvar PDF</button>
+      <a class="btn" href="#/personagens">← Voltar</a><button class="btn primary" data-action="save-pdf" data-id="${c.id}">📄 Salvar PDF</button>
       <button class="btn" data-action="open-char" data-id="${c.id}">✏️ Editar</button></div>${sheetHTML(c)}</section>`;
   }
   function importCharacter(obj) {
@@ -1176,7 +1182,7 @@
     const m = party.members[i], box = document.getElementById('partySheet');
     if (!m || !box) return;
     partyView = m.id;
-    box.innerHTML = `<div class="sheet-actions no-print"><button class="btn primary" data-action="save-pdf">📄 Salvar PDF</button><button class="btn" data-action="party-close">Fechar ficha</button>${m._live && !m._live.off ? '<span class="muted small">📡 Esta ficha se atualiza sozinha.</span>' : ''}</div>${sheetHTML(m)}`;
+    box.innerHTML = `<div class="sheet-actions no-print"><button class="btn primary" data-action="save-pdf" data-id="${m.id}" data-src="party">📄 Salvar PDF</button><button class="btn" data-action="party-close">Fechar ficha</button>${m._live && !m._live.off ? '<span class="muted small">📡 Esta ficha se atualiza sozinha.</span>' : ''}</div>${sheetHTML(m)}`;
     if (scroll) box.scrollIntoView({ behavior: 'smooth' });
   }
   const BOND_IDEAS = ['cresceram na mesma vila', 'um salvou a vida do outro', 'são rivais amigáveis', 'um deve dinheiro ao outro', 'foram presos na mesma cela', 'servem ao mesmo mentor', 'são primos distantes', 'sobreviveram juntos a um naufrágio', 'dividem um segredo perigoso'];
@@ -1469,7 +1475,8 @@
         c.story.backstory = genStory(c); toast('Rascunho criado! Edite como quiser.'); return done();
       case 'save-pdf': {
         const sh = (el.closest('#partySheet') || document).querySelector('.sheet');
-        if (sh) CF.pdf.save(sh, (sh.querySelector('.sh-name h3') || {}).textContent, toast);
+        const ch = el.dataset.src === 'party' ? party.members.find(m => m.id === id) : chars[id];
+        if (sh) CF.pdf.save(sh, ch ? ch.name : (sh.querySelector('.sh-name h3') || {}).textContent, toast, pdfCode(ch));
         return;
       }
       case 'copy-code': copyText(encodeShare(CF.portrait.strip(chars[id]))); return;
@@ -1638,9 +1645,16 @@
     }
     if (el.id === 'partyMine' && el.value) { const ch = chars[el.value]; party.members.push(JSON.parse(JSON.stringify(ch))); saveParty(); renderParty(); return; }
     if (el.dataset.actionFile === 'import-file' && el.files[0]) {
+      const f = el.files[0], isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
       const r = new FileReader();
-      r.onload = () => { try { const ch = importCharacter(JSON.parse(r.result)); toast('“' + (ch.name || 'Personagem') + '” importado!'); renderList(); } catch (err) { alert('Não foi possível importar: ' + err.message); } };
-      r.readAsText(el.files[0]);
+      r.onload = () => {
+        try {
+          const obj = isPdf ? decodeShare(CF.pdf.readCode(r.result)) : JSON.parse(r.result);
+          const ch = importCharacter(obj); toast('“' + (ch.name || 'Personagem') + '” importado!'); renderList();
+        } catch (err) { alert('Não foi possível importar: ' + err.message); }
+        el.value = '';
+      };
+      if (isPdf) r.readAsArrayBuffer(f); else r.readAsText(f);
     }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') hideTerm(); });
